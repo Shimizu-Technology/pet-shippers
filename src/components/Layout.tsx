@@ -1,0 +1,203 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Inbox, Package, Settings, User, LogOut, CreditCard, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
+  const roleSwitcherRef = useRef<HTMLDivElement>(null);
+
+  // Close role switcher when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (roleSwitcherRef.current && !roleSwitcherRef.current.contains(event.target as Node)) {
+        setShowRoleSwitcher(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Role-based navigation
+  const getNavigation = () => {
+    const basePrefix = user?.role === 'client' ? '/portal' : '/app';
+
+    if (user?.role === 'client') {
+      return [
+        { name: 'Dashboard', href: `${basePrefix}/dashboard`, icon: LayoutDashboard },
+        { name: 'Inbox', href: `${basePrefix}/inbox`, icon: Inbox },
+        { name: 'Shipments', href: `${basePrefix}/shipments`, icon: Package },
+        { name: 'Billing', href: `${basePrefix}/billing`, icon: CreditCard },
+      ];
+    }
+
+    return [
+      { name: 'Inbox', href: `${basePrefix}/inbox`, icon: Inbox },
+      { name: 'Shipments', href: `${basePrefix}/shipments`, icon: Package },
+      { name: 'Admin', href: `${basePrefix}/admin`, icon: Settings },
+    ];
+  };
+
+  const navigation = getNavigation();
+
+  const isActive = (href: string) => {
+    if (href.endsWith('/inbox')) {
+      return location.pathname === href || location.pathname.startsWith(href + '/');
+    }
+    return location.pathname.startsWith(href);
+  };
+
+  // Dev role switcher functionality
+  const switchRole = (newRole: 'admin' | 'staff' | 'partner' | 'client') => {
+    const mockUsers = {
+      admin: { id: 'u_admin', name: 'Ada Admin', role: 'admin', orgId: 'org1' },
+      staff: { id: 'u_staff', name: 'Ken Staff', role: 'staff', orgId: 'org1' },
+      partner: { id: 'u_partner', name: 'Hawaii Pet Express', role: 'partner', orgId: 'org_hawaii_pets' },
+      client: { id: 'u_client1', name: 'Sarah Johnson', role: 'client', orgId: 'org_client1' },
+    };
+    
+    const newUser = mockUsers[newRole];
+    localStorage.setItem('pet_shipper_user', JSON.stringify(newUser));
+    window.location.reload(); // Simple reload to update the app state
+  };
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Top Navigation */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center">
+              <Link to={user?.role === 'client' ? '/portal/dashboard' : '/app/inbox'} className="flex items-center group">
+                {/* Airplane Logo */}
+                <div className="w-10 h-10 rounded-full bg-brand-coral flex items-center justify-center group-hover:bg-brand-sky transition-colors">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                  </svg>
+                </div>
+                <div className="ml-3 hidden sm:block">
+                  <div className="text-lg font-bold text-brand-navy leading-tight" style={{fontFamily: 'system-ui, -apple-system, sans-serif'}}>
+                    PET SHIPPERS GUAM
+                  </div>
+                  <div className="text-xs text-brand-sky font-medium mt-0.5 tracking-wide">
+                    REUNITING YOUR FURRY LOVED ONES
+                  </div>
+                </div>
+              </Link>
+            </div>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex space-x-8">
+              {navigation.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive(item.href)
+                        ? 'text-brand-navy border-b-2 border-brand-coral'
+                        : 'text-gray-500 hover:text-brand-navy'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 mr-2" />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="flex items-center space-x-4">
+              {/* Dev Role Switcher */}
+              <div className="relative" ref={roleSwitcherRef}>
+                <button
+                  onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Switch Role (Dev Only)"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                
+                {showRoleSwitcher && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
+                        Switch Role (Dev)
+                      </div>
+                      {['admin', 'staff', 'partner', 'client'].map((role) => (
+                        <button
+                          key={role}
+                          onClick={() => {
+                            switchRole(role as any);
+                            setShowRoleSwitcher(false);
+                          }}
+                          className={`block w-full text-left px-3 py-2 text-sm transition-colors ${
+                            user?.role === role
+                              ? 'bg-brand-coral text-white'
+                              : 'text-gray-700 hover:bg-brand-warm'
+                          }`}
+                        >
+                          {role.charAt(0).toUpperCase() + role.slice(1)}
+                          {user?.role === role && ' (Current)'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center text-sm text-gray-700">
+                <User className="w-4 h-4 mr-2" />
+                <div className="hidden sm:block">
+                  <span className="font-medium">{user?.name}</span>
+                  <span className="text-xs text-gray-500 ml-2 capitalize">({user?.role})</span>
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 pb-20 md:pb-0">
+        {children}
+      </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+        <div className={`grid ${navigation.length === 4 ? 'grid-cols-4' : navigation.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} h-16`}>
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                  isActive(item.href)
+                    ? 'text-brand-navy bg-brand-coral/10'
+                    : 'text-gray-400 hover:text-brand-navy'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-xs font-medium">{item.name}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+};
