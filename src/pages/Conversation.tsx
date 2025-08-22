@@ -12,7 +12,8 @@ import {
   Package,
   Calendar,
   Download,
-  ShoppingCart
+  ShoppingCart,
+  Plus
 } from 'lucide-react';
 import { http } from '../lib/http';
 import { Message, QuoteTemplate, Shipment, Document, User } from '../types';
@@ -58,6 +59,8 @@ export const ConversationPage: React.FC = () => {
   );
   
   const convexProducts = useConvexQuery(api.products.listActive, useConvex ? {} : "skip");
+  
+  const convexQuoteTemplates = useConvexQuery(api.quoteTemplates.list, useConvex ? {} : "skip");
 
   // Utility to normalize Convex data to match our existing types
   const normalizeConvexMessage = (convexMsg: any): Message => ({
@@ -79,6 +82,10 @@ export const ConversationPage: React.FC = () => {
     ? convexMessages === undefined
     : false;
 
+  // Use Convex quote templates
+  const quoteTemplates = useConvex ? convexQuoteTemplates : [];
+  const products = useConvex ? convexProducts : [];
+
   // 🚀 All data now comes from Convex - using convex queries defined above
   // Get conversation data from Convex conversations
   const conversation = convexConversations?.find(conv => conv._id === conversationId) || null;
@@ -89,8 +96,6 @@ export const ConversationPage: React.FC = () => {
   // For now, use empty arrays for data we haven't migrated yet
   const shipment: Shipment | null = null; // TODO: Add Convex shipment query
   const documents: Document[] = [];
-  const quoteTemplates: QuoteTemplate[] = [];
-  const products = convexProducts;
 
   // 🚀 CONVEX REAL-TIME MUTATIONS (New!)
   const convexSendMessage = useConvexMutation(api.messages.send);
@@ -105,12 +110,29 @@ export const ConversationPage: React.FC = () => {
     },
   });
 
+  // 🚀 Use Convex for sending quotes
+  const convexSendQuote = useConvexMutation(api.messages.sendQuote);
+  
   const sendQuoteMutation = useMutation({
-    mutationFn: (data: { templateId: string; priceCents?: number }) =>
-      http.post(`/conversations/${conversationId}/quotes`, data),
+    mutationFn: async (data: { templateId: string; priceCents?: number }) => {
+      if (!isValidConvexId || !user?.id) throw new Error('Invalid conversation or user');
+      
+      const template = quoteTemplates?.find(t => t._id === data.templateId);
+      if (!template) throw new Error('Template not found');
+      
+      return await convexSendQuote({
+        conversationId: conversationId as Id<"conversations">,
+        senderId: user.id,
+        payload: {
+          templateId: data.templateId,
+          title: template.title,
+          body: template.body,
+          priceCents: data.priceCents || template.defaultPriceCents,
+        },
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // No need to invalidate queries - Convex updates automatically!
       setShowQuoteModal(false);
     },
   });
@@ -163,7 +185,7 @@ export const ConversationPage: React.FC = () => {
   };
 
   const handleSendQuote = (templateId: string, customPrice?: number) => {
-    const template = quoteTemplates?.find(t => t.id === templateId);
+    const template = quoteTemplates?.find(t => t._id === templateId);
     if (template) {
       sendQuoteMutation.mutate({
         templateId,
@@ -221,10 +243,67 @@ export const ConversationPage: React.FC = () => {
         );
       } else if (payload.type === 'quote_requested') {
         return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
-            <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
-              <Plane className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-              <span className="truncate">Quote request submitted for {payload.petName}</span>
+          <div className="flex justify-center my-4 sm:my-6 px-4">
+            <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-[#F3C0CF] flex items-center justify-center">
+                  <Plane className="w-4 h-4 text-[#0E2A47]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-[#0E2A47] text-lg">Quote Request</h3>
+                  <p className="text-sm text-gray-600">New request submitted</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pet Name</p>
+                    <p className="text-sm font-semibold text-[#0E2A47]">{payload.petName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Type & Breed</p>
+                    <p className="text-sm text-[#0E2A47]">{payload.petType} • {payload.petBreed}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Route</p>
+                  <p className="text-sm font-semibold text-[#0E2A47]">
+                    {payload.route?.from} → {payload.route?.to}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</p>
+                    <p className="text-sm text-[#0E2A47]">{payload.petWeight} lbs</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Travel Date</p>
+                    <p className="text-sm text-[#0E2A47]">{payload.preferredTravelDate}</p>
+                  </div>
+                </div>
+                
+                {payload.specialRequirements && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Special Requirements</p>
+                    <p className="text-sm text-[#0E2A47] bg-gray-50 p-2 rounded">{payload.specialRequirements}</p>
+                  </div>
+                )}
+                
+                {/* Generate Quote Button for Admin/Staff */}
+                {isStaffOrAdmin && (
+                  <div className="pt-3 border-t border-gray-200">
+                    <Button 
+                      onClick={() => setShowQuoteModal(true)}
+                      className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white"
+                    >
+                      Generate Quote Response
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -614,67 +693,91 @@ export const ConversationPage: React.FC = () => {
         title="Send Quote to Customer"
         size="lg"
       >
-        <div className="space-y-4">
-          <div className="bg-blue-50 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-medium text-[#0E2A47] mb-2">💡 Quick Tip</h3>
-            <p className="text-sm text-gray-700">
-              Select a quote template below. The customer will receive the quote and can accept it to proceed with booking.
-            </p>
-          </div>
-
-          {quoteTemplates?.map((template) => (
-            <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-[#F3C0CF] transition-colors">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3">
-                <div className="flex-1">
-                  <h4 className="font-medium text-[#0E2A47] mb-2">{template.title}</h4>
-                  <p className="text-sm text-gray-600 mb-3">{template.body}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-[#0E2A47]">
-                    {formatCurrency(template.defaultPriceCents)}
-                  </div>
-                  <div className="text-xs text-gray-500">Starting price</div>
+        <div className="space-y-6">
+          {/* Improved tip section */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-lg">💡</span>
                 </div>
               </div>
-              
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-                <div className="text-xs text-gray-500">
-                  Includes: {template.body.split('.')[0]}...
-                </div>
-                <Button
-                  onClick={() => handleSendQuote(template.id)}
-                  size="sm"
-                  disabled={sendQuoteMutation.isPending}
-                  className="bg-[#F3C0CF] hover:bg-[#E8A5B8] text-[#0E2A47] font-semibold shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
-                >
-                  {sendQuoteMutation.isPending ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#0E2A47] mr-2"></div>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" />
-                      Send Quote
-                    </>
-                  )}
-                </Button>
+              <div>
+                <h3 className="text-sm font-semibold text-[#0E2A47] mb-1">Quick Tip</h3>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Select a quote template below. The customer will receive the quote and can accept it to proceed with booking.
+                </p>
               </div>
             </div>
-          ))}
+          </div>
+
+          {/* Redesigned quote template cards */}
+          <div className="space-y-4">
+            {quoteTemplates?.map((template) => (
+              <div key={template._id} className="group border-2 border-gray-100 rounded-xl p-6 hover:border-[#F3C0CF] hover:shadow-lg transition-all duration-200 bg-white">
+                {/* Header with title and price */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1 pr-4">
+                    <h4 className="text-lg font-semibold text-[#0E2A47] mb-1 group-hover:text-[#1a3a5c] transition-colors">
+                      {template.title}
+                    </h4>
+                    <div className="inline-flex items-center px-2 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600">
+                      Starting at {formatCurrency(template.defaultPriceCents)}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-3xl font-bold text-[#0E2A47] leading-none">
+                      {formatCurrency(template.defaultPriceCents)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Description */}
+                <div className="mb-5">
+                  <p className="text-sm text-gray-600 leading-relaxed line-clamp-3">
+                    {template.body}
+                  </p>
+                </div>
+                
+                {/* Action button - full width and prominent */}
+                <div className="pt-4 border-t border-gray-100">
+                  <Button
+                    onClick={() => handleSendQuote(template._id)}
+                    disabled={sendQuoteMutation.isPending}
+                    className="w-full bg-[#F3C0CF] hover:bg-[#E8A5B8] text-[#0E2A47] font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 text-base"
+                  >
+                    {sendQuoteMutation.isPending ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#0E2A47] mr-3"></div>
+                        <span>Sending Quote...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center">
+                        <Send className="w-5 h-5 mr-3" />
+                        <span>Send This Quote</span>
+                      </div>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
 
           {(!quoteTemplates || quoteTemplates.length === 0) && (
-            <div className="text-center py-8">
-              <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Quote Templates</h3>
-              <p className="text-gray-600 mb-4">
-                Create quote templates in the Admin section to send quotes to customers.
+            <div className="text-center py-12 px-6">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Quote Templates Available</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto leading-relaxed">
+                Create quote templates in the Admin section to send professional quotes to customers quickly and efficiently.
               </p>
               <Link
                 to="/app/admin"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-[#0E2A47] bg-[#F3C0CF] hover:bg-[#F3C0CF]/90"
+                className="inline-flex items-center px-6 py-3 bg-[#0E2A47] hover:bg-[#1a3a5c] text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
               >
-                Go to Admin
+                <Plus className="w-5 h-5 mr-2" />
+                Create Quote Templates
               </Link>
             </div>
           )}

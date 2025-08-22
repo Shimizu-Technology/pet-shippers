@@ -193,6 +193,25 @@ export const seedAllData = mutation({
       active: true,
     });
 
-    return `Seeded complete test data: users, conversation, messages, shipment, and products`;
+    // Create quote templates for staff to use
+    await ctx.db.insert("quoteTemplates", {
+      title: "Standard Pet Shipping - Domestic",
+      body: "This quote includes: IATA-approved crate, health certificate processing, door-to-door pickup and delivery, flight booking, and 24/7 tracking. All pets travel in climate-controlled cargo areas with experienced handlers.",
+      defaultPriceCents: 125000, // $1,250
+    });
+
+    await ctx.db.insert("quoteTemplates", {
+      title: "Premium Pet Shipping - International", 
+      body: "Our premium service includes: Custom IATA crate, expedited health certificates, VIP handling, direct flights when possible, real-time GPS tracking, and dedicated customer support. Perfect for international relocations.",
+      defaultPriceCents: 285000, // $2,850
+    });
+
+    await ctx.db.insert("quoteTemplates", {
+      title: "Express Pet Shipping - Same Day",
+      body: "Emergency same-day service includes: Immediate pickup, priority flight booking, expedited processing, and real-time updates. Available for urgent relocations and emergency situations.",
+      defaultPriceCents: 450000, // $4,500
+    });
+
+    return `Seeded complete test data: users, conversation, messages, shipment, products, and quote templates`;
   },
 });
