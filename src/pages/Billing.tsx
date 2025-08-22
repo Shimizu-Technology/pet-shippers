@@ -27,15 +27,30 @@ export const BillingPage: React.FC = () => {
 
   const isLoading = convexPaymentRequests === undefined;
 
-  // 🚀 Use Convex mutation for marking payments as paid
+  // 🚀 Use Convex mutations for payments and status messages
   const convexMarkPaid = useConvexMutation(api.payments.markPaid);
+  const convexSendStatus = useConvexMutation(api.messages.sendStatus);
 
   const markPaidMutation = useMutation({
-    mutationFn: (paymentId: string) =>
-      convexMarkPaid({ id: paymentId as Id<"paymentRequests"> }),
+    mutationFn: async (paymentRequest: PaymentRequest) => {
+      // Mark payment as paid in Convex
+      await convexMarkPaid({ id: paymentRequest.id as Id<"paymentRequests"> });
+      
+      // Send status message to conversation
+      await convexSendStatus({
+        conversationId: paymentRequest.conversationId as Id<"conversations">,
+        senderId: "system", // System message for payment completion
+        text: `Payment completed: ${formatCurrency(paymentRequest.amountCents)}`,
+        payload: {
+          type: 'payment_completed',
+          paymentId: paymentRequest.id,
+          amountCents: paymentRequest.amountCents,
+        },
+      });
+    },
     onSuccess: () => {
       // No need to invalidate queries - Convex updates automatically!
-      console.log('Payment marked as paid via Convex');
+      console.log('Payment completed and status message sent');
     },
   });
 
@@ -45,11 +60,11 @@ export const BillingPage: React.FC = () => {
     
     // Simulate payment completion after a brief delay
     setTimeout(() => {
-      markPaidMutation.mutate(paymentRequest.id);
+      markPaidMutation.mutate(paymentRequest);
     }, 1000);
     
-    // Show mock checkout
-    alert(`Redirecting to payment: ${checkoutUrl}\n\nPayment will be marked as completed automatically.`);
+    // In a real app, you'd redirect to the checkout URL
+    alert(`Redirecting to payment processor: ${checkoutUrl}\n\nSimulating payment completion...`);
   };
 
   const pendingRequests = paymentRequests?.filter(pr => pr.status === 'requested') || [];

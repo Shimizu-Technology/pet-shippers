@@ -444,6 +444,8 @@ export const ConversationPage: React.FC = () => {
                           // Find the quote message to get the actual amount
                           const quoteMessage = activeMessages?.find(msg => msg.kind === 'quote');
                           const quoteAmount = quoteMessage ? (quoteMessage.payload as any)?.priceCents / 100 : 4500;
+                          console.log('Quote message:', quoteMessage);
+                          console.log('Quote amount (dollars):', quoteAmount);
                           setPaymentAmount(quoteAmount);
                           setShowPaymentModal(true);
                         }}
