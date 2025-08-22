@@ -1,0 +1,103 @@
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+
+// Create a new quote request from a customer
+export const create = mutation({
+  args: {
+    petName: v.string(),
+    petType: v.union(v.literal("dog"), v.literal("cat"), v.literal("other")),
+    petBreed: v.string(),
+    petWeight: v.number(),
+    route: v.object({
+      from: v.string(),
+      to: v.string(),
+    }),
+    preferredTravelDate: v.string(),
+    specialRequirements: v.string(),
+    customerUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Create the quote request
+    const quoteRequestId = await ctx.db.insert("quoteRequests", {
+      petName: args.petName,
+      petType: args.petType,
+      petBreed: args.petBreed,
+      petWeight: args.petWeight,
+      route: args.route,
+      preferredTravelDate: args.preferredTravelDate,
+      specialRequirements: args.specialRequirements,
+      customerUserId: args.customerUserId,
+      status: "pending",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Create a conversation for this quote request
+    const conversationId = await ctx.db.insert("conversations", {
+      title: `Quote Request: ${args.petName} (${args.route.from} → ${args.route.to})`,
+      participantIds: [args.customerUserId], // Staff will be added when they respond
+      kind: "client",
+      lastMessageAt: Date.now(),
+    });
+
+    // Create an initial system message in the conversation
+    await ctx.db.insert("messages", {
+      conversationId,
+      senderId: "system",
+      text: `New quote request submitted for ${args.petName}`,
+      kind: "status",
+      payload: {
+        type: "quote_requested",
+        quoteRequestId,
+        petName: args.petName,
+        route: args.route,
+        travelDate: args.preferredTravelDate,
+      },
+      createdAt: Date.now(),
+    });
+
+    return { quoteRequestId, conversationId };
+  },
+});
+
+// List quote requests (for admin/staff)
+export const list = query({
+  args: {
+    userId: v.string(),
+    userRole: v.union(v.literal("admin"), v.literal("staff"), v.literal("client"), v.literal("partner")),
+  },
+  handler: async (ctx, args) => {
+    if (args.userRole === "client") {
+      // Clients can only see their own quote requests
+      return await ctx.db
+        .query("quoteRequests")
+        .filter((q) => q.eq(q.field("customerUserId"), args.userId))
+        .order("desc")
+        .collect();
+    } else {
+      // Admin/staff can see all quote requests
+      return await ctx.db
+        .query("quoteRequests")
+        .order("desc")
+        .collect();
+    }
+  },
+});
+
+// Update quote request status
+export const updateStatus = mutation({
+  args: {
+    quoteRequestId: v.id("quoteRequests"),
+    status: v.union(v.literal("pending"), v.literal("quoted"), v.literal("accepted"), v.literal("declined")),
+    updatedBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.quoteRequestId, {
+      status: args.status,
+      updatedAt: Date.now(),
+    });
+
+    return args.quoteRequestId;
+  },
+});

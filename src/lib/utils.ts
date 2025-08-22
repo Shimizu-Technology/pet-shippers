@@ -68,6 +68,8 @@ export const getStatusColor = (status: string) => {
 };
 
 export const getStatusLabel = (status: string) => {
+  if (!status) return 'Unknown Status';
+  
   const labels = {
     quote_requested: 'Quote Requested',
     quote_sent: 'Quote Sent',

@@ -7,44 +7,54 @@ import { Conversation, User } from '../types';
 import { formatRelativeTime } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Input } from '../components/ui/Input';
+// Convex imports
+import { useQuery as useConvexQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useAuth } from '../contexts/AuthContext';
 
 export const InboxPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAuth();
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['conversations', activeFilter, searchQuery],
-    queryFn: async () => {
-      try {
-        console.log('Fetching conversations with filter:', activeFilter, 'search:', searchQuery);
-        
-        const params: Record<string, string> = {};
-        
-        if (activeFilter !== 'All') {
-          params.kind = activeFilter === 'Clients' ? 'client' : activeFilter === 'Partners' ? 'partner' : activeFilter.toLowerCase();
-        }
-        
-        if (searchQuery.trim()) {
-          params.search = searchQuery.trim();
-        }
-        
-        const response = await http.get('/conversations', { params });
-        console.log('Conversations response:', response.data);
-        return response.data.conversations as Conversation[];
-      } catch (error) {
-        console.error('Error fetching conversations:', error);
-        throw error;
-      }
-    },
+  // 🚀 Use Convex instead of mock API
+  const convexConversations = useConvexQuery(
+    api.conversations.list, 
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
+
+  const convexUsers = useConvexQuery(api.users.list);
+
+  // Transform Convex data to match our existing types
+  const normalizeConvexConversation = (convexConv: any): Conversation => ({
+    id: convexConv._id,
+    title: convexConv.title,
+    participantIds: convexConv.participantIds,
+    lastMessageAt: new Date(convexConv.lastMessageAt).toISOString(),
+    kind: convexConv.kind,
   });
 
-  const { data: users } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await http.get('/users');
-      return response.data.users as User[];
-    },
-  });
+  // Apply filtering to Convex data
+  const data = convexConversations?.map(normalizeConvexConversation).filter((conv: Conversation) => {
+    // Filter by type
+    if (activeFilter !== 'All') {
+      const filterKind = activeFilter === 'Clients' ? 'client' : activeFilter === 'Partners' ? 'partner' : activeFilter.toLowerCase();
+      if (conv.kind !== filterKind) return false;
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      return conv.title.toLowerCase().includes(searchQuery.toLowerCase());
+    }
+    
+    return true;
+  }) || [];
+
+  const isLoading = convexConversations === undefined;
+  const error = null;
+
+  // Use Convex users data
+  const users = convexUsers;
 
   const filters = ['All', 'Clients', 'Partners'];
 

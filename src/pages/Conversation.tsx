@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Send, 
   Paperclip, 
@@ -12,17 +12,20 @@ import {
   Package,
   Calendar,
   Download,
-  Users,
   ShoppingCart
 } from 'lucide-react';
 import { http } from '../lib/http';
-import { Message, QuoteTemplate, Shipment, Document, Conversation, User, Product } from '../types';
-import { formatDate, formatCurrency, getStatusColor, getStatusLabel, formatRelativeTime } from '../lib/utils';
+import { Message, QuoteTemplate, Shipment, Document, User } from '../types';
+import { formatDate, formatCurrency, getStatusLabel, formatRelativeTime } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
+// Convex imports for real-time messaging
+import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 export const ConversationPage: React.FC = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -35,64 +38,62 @@ export const ConversationPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const { data: conversation } = useQuery({
-    queryKey: ['conversation', conversationId],
-    queryFn: async () => {
-      const response = await http.get(`/conversations/${conversationId}`);
-      return response.data.conversation;
-    },
+  // 🚀 USE CONVEX ONLY (no more mock API)
+  const useConvex = true;
+
+  // 🚀 CONVEX REAL-TIME QUERIES (New!) - MOVED TO TOP
+  // Only query Convex when we're in Convex mode AND have a valid Convex conversation ID
+  const isValidConvexId = conversationId && !conversationId.startsWith('c') && conversationId.length > 10;
+  
+  const convexMessages = useConvexQuery(
+    api.messages.list, 
+    (useConvex && isValidConvexId) ? { conversationId: conversationId as Id<"conversations"> } : "skip"
+  );
+  
+  const convexUsers = useConvexQuery(api.users.list, useConvex ? {} : "skip");
+  
+  const convexConversations = useConvexQuery(
+    api.conversations.list, 
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
+  
+  const convexProducts = useConvexQuery(api.products.listActive, useConvex ? {} : "skip");
+
+  // Utility to normalize Convex data to match our existing types
+  const normalizeConvexMessage = (convexMsg: any): Message => ({
+    id: convexMsg._id,
+    conversationId: convexMsg.conversationId,
+    senderId: convexMsg.senderId,
+    text: convexMsg.text,
+    kind: convexMsg.kind,
+    payload: convexMsg.payload,
+    createdAt: new Date(convexMsg.createdAt).toISOString(),
   });
 
-  const { data: messages, isLoading } = useQuery({
-    queryKey: ['messages', conversationId],
-    queryFn: async () => {
-      const response = await http.get(`/conversations/${conversationId}/messages`);
-      return response.data.messages as Message[];
-    },
-  });
+  // Choose data source based on toggle
+  const activeMessages = useConvex 
+    ? convexMessages?.map(normalizeConvexMessage) 
+    : [];
 
-  const { data: users } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await http.get('/users');
-      return response.data.users as User[];
-    },
-  });
+  const isActiveLoading = useConvex 
+    ? convexMessages === undefined
+    : false;
 
-  const { data: shipment } = useQuery({
-    queryKey: ['conversation-shipment', conversationId],
-    queryFn: async () => {
-      const response = await http.get('/shipments');
-      const shipments = response.data.shipments as Shipment[];
-      return shipments.find(s => s.conversationId === conversationId);
-    },
-  });
+  // 🚀 All data now comes from Convex - using convex queries defined above
+  // Get conversation data from Convex conversations
+  const conversation = convexConversations?.find(conv => conv._id === conversationId) || null;
+  
+  // Transform Convex data to match existing types
+  const users = convexUsers;
+  
+  // For now, use empty arrays for data we haven't migrated yet
+  const shipment: Shipment | null = null; // TODO: Add Convex shipment query
+  const documents: Document[] = [];
+  const quoteTemplates: QuoteTemplate[] = [];
+  const products = convexProducts;
 
-  const { data: documents } = useQuery({
-    queryKey: ['shipment-documents', shipment?.id],
-    queryFn: async () => {
-      if (!shipment?.id) return [];
-      const response = await http.get(`/shipments/${shipment.id}/documents`);
-      return response.data.documents as Document[];
-    },
-    enabled: !!shipment?.id,
-  });
-
-  const { data: quoteTemplates } = useQuery({
-    queryKey: ['quote-templates'],
-    queryFn: async () => {
-      const response = await http.get('/quote_templates');
-      return response.data.quote_templates as QuoteTemplate[];
-    },
-  });
-
-  const { data: products } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      const response = await http.get('/products');
-      return response.data.products as Product[];
-    },
-  });
+  // 🚀 CONVEX REAL-TIME MUTATIONS (New!)
+  const convexSendMessage = useConvexMutation(api.messages.send);
 
   const sendMessageMutation = useMutation({
     mutationFn: (messageData: any) => 
@@ -138,15 +139,26 @@ export const ConversationPage: React.FC = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [activeMessages]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim()) {
-      sendMessageMutation.mutate({
-        kind: 'text',
-        text: message.trim(),
-      });
+      if (useConvex && isValidConvexId) {
+        // 🚀 Use Convex for real-time messaging
+        convexSendMessage({
+          conversationId: conversationId as Id<"conversations">,
+          senderId: user?.id || 'unknown',
+          text: message.trim(),
+        });
+        setMessage(''); // Clear message immediately for better UX
+      } else {
+        // Use existing mock API
+        sendMessageMutation.mutate({
+          kind: 'text',
+          text: message.trim(),
+        });
+      }
     }
   };
 
@@ -167,28 +179,25 @@ export const ConversationPage: React.FC = () => {
     if (!users) return { participants: [] };
     
     const participants = participantIds
-      .map(id => users.find(u => u.id === id))
+      .map(id => users.find(u => u._id === id || (u as any).id === id))
+      .filter(Boolean)
+      .map(u => u && ({
+        id: u._id || (u as any).id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        orgId: u.orgId
+      }))
       .filter(Boolean) as User[];
     
     return { participants };
   };
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      admin: 'bg-red-100 text-red-700',
-      staff: 'bg-blue-100 text-blue-700', 
-      partner: 'bg-green-100 text-green-700',
-      client: 'bg-gray-100 text-gray-700',
-    };
-    return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-700';
-  };
+
 
   const renderMessage = (msg: Message) => {
     const isSystem = msg.senderId === 'system';
     const isCurrentUser = msg.senderId === user?.id;
-    
-    // Determine if sender is staff/admin for bubble styling
-    const senderUser = msg.senderId === 'u_admin' || msg.senderId === 'u_staff';
 
     if (msg.kind === 'status' && isSystem) {
       const payload = msg.payload as any;
@@ -210,12 +219,21 @@ export const ConversationPage: React.FC = () => {
             </div>
           </div>
         );
+      } else if (payload.type === 'quote_requested') {
+        return (
+          <div className="flex justify-center my-3 sm:my-4 px-4">
+            <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <Plane className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">Quote request submitted for {payload.petName}</span>
+            </div>
+          </div>
+        );
       } else {
         return (
           <div className="flex justify-center my-3 sm:my-4 px-4">
             <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <Plane className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-              <span className="truncate">Status updated to: {getStatusLabel(payload.to)}</span>
+              <span className="truncate">Status updated to: {getStatusLabel(payload.to || payload.type)}</span>
             </div>
           </div>
         );
@@ -293,7 +311,9 @@ export const ConversationPage: React.FC = () => {
     );
   };
 
-  if (isLoading) {
+  // Show loading if the active data source is loading (removed duplicate declaration)
+  
+  if (isActiveLoading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-64">
@@ -323,9 +343,17 @@ export const ConversationPage: React.FC = () => {
                 <ArrowLeft className="w-5 h-5" />
               </Link>
               <div className="flex-1 min-w-0">
-                <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
-                  {conversation?.title}
-                </h1>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
+                    {conversation?.title}
+                  </h1>
+                  {/* 🚀 Convex Status */}
+                  <div className="flex items-center space-x-2 text-xs">
+                    <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">
+                      ⚡ Real-time
+                    </span>
+                  </div>
+                </div>
                 {conversation && (
                   <div className="mt-1">
                     {(() => {
@@ -379,8 +407,8 @@ export const ConversationPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Mobile Shipment Details */}
-          {showMobileShipmentDetails && shipment && (
+          {/* Mobile Shipment Details - TODO: Implement with Convex shipments */}
+          {/* {showMobileShipmentDetails && shipment && (
             <div className="lg:hidden border-b border-gray-200 bg-white p-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -415,12 +443,32 @@ export const ConversationPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50">
+            {/* Show warning when trying to use Convex with mock conversation */}
+            {useConvex && !isValidConvexId && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <div className="w-5 h-5 text-yellow-600 mt-0.5">⚠️</div>
+                  <div>
+                    <h4 className="text-sm font-medium text-yellow-800">Convex Mode - No Data</h4>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      You're viewing a mock API conversation. To test Convex real-time messaging:
+                    </p>
+                    <ol className="text-sm text-yellow-700 mt-2 ml-4 list-decimal">
+                      <li>Go to Customer Dashboard</li>
+                      <li>Click "Seed All Data" to create Convex conversations</li>
+                      <li>Navigate to a Convex conversation from the inbox</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-3 sm:space-y-4">
-              {messages?.map((msg) => (
+              {activeMessages?.map((msg) => (
                 <div key={msg.id}>
                   {renderMessage(msg)}
                 </div>
@@ -490,8 +538,8 @@ export const ConversationPage: React.FC = () => {
         {/* Sidebar - Hidden on mobile */}
         <div className="hidden lg:block w-80 border-l border-gray-200 bg-white">
           <div className="p-4 space-y-6">
-            {/* Shipment Summary */}
-            {shipment && (
+            {/* Shipment Summary - TODO: Implement with Convex shipments */}
+            {/* {shipment && (
               <div>
                 <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Shipment Details</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-3">
@@ -520,7 +568,7 @@ export const ConversationPage: React.FC = () => {
                   </Link>
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* Documents */}
             <div>
@@ -649,7 +697,7 @@ export const ConversationPage: React.FC = () => {
         <div className="space-y-3 max-h-96 overflow-y-auto">
           {products?.filter(p => p.active).map((product) => (
             <div
-              key={product.id}
+              key={product._id}
               className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
             >
               <div className="flex items-center justify-between">
@@ -661,7 +709,7 @@ export const ConversationPage: React.FC = () => {
                   </p>
                 </div>
                 <Button
-                  onClick={() => sendProductMutation.mutate(product.id)}
+                  onClick={() => sendProductMutation.mutate(product._id)}
                   disabled={sendProductMutation.isPending}
                   className="ml-4"
                 >
@@ -755,21 +803,24 @@ const ConversationsList: React.FC = () => {
   const { user } = useAuth();
   const { conversationId } = useParams<{ conversationId: string }>();
   
-  const { data: conversations, isLoading } = useQuery({
-    queryKey: ['conversations'],
-    queryFn: async () => {
-      const response = await http.get('/conversations');
-      return response.data.conversations as Conversation[];
-    },
-  });
-
-  const { data: users } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const response = await http.get('/users');
-      return response.data.users as User[];
-    },
-  });
+  // 🚀 Use Convex data instead of TanStack Query
+  const convexConversations = useConvexQuery(
+    api.conversations.list, 
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
+  const convexUsers = useConvexQuery(api.users.list);
+  
+  // Transform to match existing types
+  const conversations = convexConversations?.map((conv: any) => ({
+    id: conv._id,
+    title: conv.title,
+    participantIds: conv.participantIds,
+    lastMessageAt: new Date(conv.lastMessageAt).toISOString(),
+    kind: conv.kind,
+  })) || [];
+  
+  const users = convexUsers;
+  const isLoading = convexConversations === undefined;
 
   const getKindColor = (kind: string) => {
     const colors = {
@@ -784,21 +835,21 @@ const ConversationsList: React.FC = () => {
     if (!users) return { participants: [] };
     
     const participants = participantIds
-      .map(id => users.find(u => u.id === id))
+      .map(id => users.find(u => u._id === id || (u as any).id === id))
+      .filter(Boolean)
+      .map(u => u && ({
+        id: u._id || (u as any).id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        orgId: u.orgId
+      }))
       .filter(Boolean) as User[];
     
     return { participants };
   };
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      admin: 'bg-red-100 text-red-700',
-      staff: 'bg-blue-100 text-blue-700', 
-      partner: 'bg-green-100 text-green-700',
-      client: 'bg-gray-100 text-gray-700',
-    };
-    return colors[role as keyof typeof colors] || 'bg-gray-100 text-gray-700';
-  };
+
 
   const basePrefix = user?.role === 'client' ? '/portal' : '/app';
 

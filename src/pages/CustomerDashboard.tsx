@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Package, MessageCircle, FileText, Clock, Plus, Send, User } from 'lucide-react';
-import { http } from '../lib/http';
-import { Shipment, Conversation, Document } from '../types';
-import { formatDate, getStatusColor, getStatusLabel, formatRelativeTime } from '../lib/utils';
+import { Document } from '../types';
+import { getStatusColor, getStatusLabel, formatRelativeTime } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
+// Convex imports for testing
+import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useAuth } from '../contexts/AuthContext';
 
 export const CustomerDashboardPage: React.FC = () => {
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -22,31 +25,63 @@ export const CustomerDashboardPage: React.FC = () => {
     travelDate: '',
     specialRequirements: ''
   });
-  const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  const { data: shipments, isLoading: shipmentsLoading } = useQuery({
-    queryKey: ['customer-shipments'],
-    queryFn: async () => {
-      const response = await http.get('/shipments');
-      return response.data.shipments as Shipment[];
-    },
-  });
+  // Convex test queries
+  const convexUsers = useConvexQuery(api.users.list);
+  const convexConversations = useConvexQuery(
+    api.conversations.list, 
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
+  const seedUsers = useConvexMutation(api.seedData.seedUsers);
+  const seedAllData = useConvexMutation(api.seedData.seedAllData);
 
-  const { data: conversations, isLoading: conversationsLoading } = useQuery({
-    queryKey: ['customer-conversations'],
-    queryFn: async () => {
-      const response = await http.get('/conversations', { params: { kind: 'client' } });
-      return response.data.conversations as Conversation[];
-    },
-  });
+  // 🚀 Use Convex queries instead of mock API
+  const convexShipments = useConvexQuery(
+    api.shipments.list,
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
 
-  const { data: documents, isLoading: documentsLoading } = useQuery({
-    queryKey: ['customer-documents'],
-    queryFn: async () => {
-      const response = await http.get('/documents');
-      return response.data.documents as Document[];
-    },
-  });
+  // Transform Convex data to match existing types
+  const shipments = convexShipments?.map((convexShip: any) => ({
+    id: convexShip._id,
+    conversationId: convexShip.conversationId,
+    petName: convexShip.petName,
+    petType: convexShip.petType,
+    petBreed: convexShip.petBreed,
+    petWeight: convexShip.petWeight,
+    ownerName: convexShip.ownerName,
+    ownerEmail: convexShip.ownerEmail,
+    ownerPhone: convexShip.ownerPhone,
+    route: convexShip.route,
+    status: convexShip.status,
+    estimatedDeparture: convexShip.estimatedDeparture,
+    estimatedArrival: convexShip.estimatedArrival,
+    actualDeparture: convexShip.actualDeparture,
+    actualArrival: convexShip.actualArrival,
+    flightNumber: convexShip.flightNumber,
+    crateSize: convexShip.crateSize,
+    specialInstructions: convexShip.specialInstructions,
+    createdAt: new Date(convexShip.createdAt).toISOString(),
+    updatedAt: new Date(convexShip.updatedAt).toISOString(),
+  })) || [];
+
+  // Transform conversations
+  const conversations = convexConversations?.map((convexConv: any) => ({
+    id: convexConv._id,
+    title: convexConv.title,
+    participantIds: convexConv.participantIds,
+    lastMessageAt: new Date(convexConv.lastMessageAt).toISOString(),
+    kind: convexConv.kind,
+  })) || [];
+
+  // For now, use empty documents array (we can add Convex documents later)
+  const documents: Document[] = [];
+
+  // Loading states
+  const shipmentsLoading = convexShipments === undefined;
+  const conversationsLoading = convexConversations === undefined;
+  const documentsLoading = false;
 
   const activeShipments = shipments?.filter(s => 
     s.status !== 'delivered' && s.status !== 'completed'
@@ -54,9 +89,14 @@ export const CustomerDashboardPage: React.FC = () => {
 
   const recentConversations = conversations?.slice(0, 3) || [];
 
+  // 🚀 Use Convex mutation for quote requests
+  const convexCreateQuoteRequest = useConvexMutation(api.quoteRequests.create);
+
   const submitQuoteRequestMutation = useMutation({
     mutationFn: async (data: typeof quoteForm) => {
-      const response = await http.post('/quote_requests', {
+      if (!user?.id) throw new Error('User not authenticated');
+      
+      return await convexCreateQuoteRequest({
         petName: data.petName,
         petType: data.petType,
         petBreed: data.petBreed,
@@ -66,13 +106,12 @@ export const CustomerDashboardPage: React.FC = () => {
           to: data.toLocation
         },
         preferredTravelDate: data.travelDate,
-        specialRequirements: data.specialRequirements
+        specialRequirements: data.specialRequirements,
+        customerUserId: user.id,
       });
-      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-shipments'] });
-      queryClient.invalidateQueries({ queryKey: ['customer-conversations'] });
+      // No need to invalidate queries since Convex is real-time
       setShowQuoteModal(false);
       setQuoteForm({
         petName: '',
@@ -111,6 +150,45 @@ export const CustomerDashboardPage: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        {/* Convex Test Section */}
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+          <h3 className="font-bold text-blue-800 mb-2">🚀 Convex Integration Test</h3>
+          <div className="text-sm text-blue-700 mb-2 space-y-1">
+            <p>Convex Users: {convexUsers ? `${convexUsers.length} users found` : 'Loading...'}</p>
+            <p>Convex Conversations: {convexConversations ? `${convexConversations.length} conversations found` : 'Loading...'}</p>
+            {convexConversations && convexConversations.length > 0 && (
+              <div className="mt-2">
+                <p className="font-medium text-blue-800">Available Convex Conversations:</p>
+                {convexConversations.map((conv: any) => (
+                  <div key={conv._id} className="ml-2 mt-1">
+                    <Link 
+                      to={`/app/inbox/${conv._id}`}
+                      className="text-blue-600 hover:text-blue-800 underline text-xs"
+                    >
+                      📧 {conv.title}
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              onClick={() => seedUsers({})}
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1"
+            >
+              Seed Users
+            </Button>
+            <Button 
+              onClick={() => seedAllData({})}
+              className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1"
+            >
+              Seed All Data
+            </Button>
+
+          </div>
+        </div>
+
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>

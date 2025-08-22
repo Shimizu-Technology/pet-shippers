@@ -1,33 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { http } from '../lib/http';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'client'>('client');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
 
-  const loginMutation = useMutation({
-    mutationFn: (data: { email: string; role: 'admin' | 'client' }) => 
-      http.post('/session', data),
-    onSuccess: (response) => {
-      login(response.data.user);
-      navigate(response.data.user.role === 'client' ? '/portal/dashboard' : '/app/inbox');
-    },
-    onError: (error) => {
-      console.error('Login failed:', error);
-    },
-  });
+  // Navigate after successful login
+  useEffect(() => {
+    if (user) {
+      const destination = user.role === 'client' ? '/portal/dashboard' : '/app/inbox';
+      navigate(destination, { replace: true });
+    }
+  }, [user, navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) {
-      loginMutation.mutate({ email: email.trim(), role: selectedRole });
+    if (email.trim() && password.trim()) {
+      setIsLoading(true);
+      setError('');
+      
+      try {
+        await login(email.trim(), password.trim());
+        // The login function will set the user in context
+        // We'll let the useEffect handle navigation after user is set
+      } catch (error: any) {
+        console.error('Login failed:', error);
+        setError(error.message || 'Login failed. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -47,35 +55,11 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Login as
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedRole('client')}
-                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                  selectedRole === 'client'
-                    ? 'bg-[#F3C0CF] border-[#F3C0CF] text-[#0E2A47]'
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-gray-400'
-                }`}
-              >
-                Customer
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedRole('admin')}
-                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                  selectedRole === 'admin'
-                    ? 'bg-[#F3C0CF] border-[#F3C0CF] text-[#0E2A47]'
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-gray-400'
-                }`}
-              >
-                Staff/Admin
-              </button>
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-red-600 text-sm">{error}</p>
             </div>
-          </div>
+          )}
 
           <Input
             type="email"
@@ -86,19 +70,33 @@ export const LoginPage: React.FC = () => {
             required
           />
 
+          <Input
+            type="password"
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            required
+          />
+
           <Button
             type="submit"
-            className="w-full"
-            disabled={loginMutation.isPending}
+            className="w-full bg-[#F3C0CF] hover:bg-[#F3C0CF]/90 text-[#0E2A47] font-semibold"
+            disabled={isLoading}
           >
-            {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
+            {isLoading ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Demo: Choose your role and use any email to sign in
-          </p>
+        {/* Demo credentials */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">🚀 Demo Credentials (Auto-Created):</h3>
+          <div className="text-xs text-blue-700 space-y-1">
+            <p><strong>Client:</strong> client@example.com / any password</p>
+            <p><strong>Staff:</strong> staff@example.com / any password</p>
+            <p><strong>Admin:</strong> admin@example.com / any password</p>
+            <p className="mt-2 text-blue-600 italic">Users are created automatically on first login!</p>
+          </div>
         </div>
       </div>
     </div>
