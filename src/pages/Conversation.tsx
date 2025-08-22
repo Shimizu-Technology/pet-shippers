@@ -219,6 +219,46 @@ export const ConversationPage: React.FC = () => {
     });
   };
 
+  const handleNextStep = (step: 'documents' | 'crate') => {
+    if (!isValidConvexId || !user?.id) return;
+    
+    const stepMessages = {
+      documents: {
+        text: "Document requirements sent",
+        payload: {
+          type: "documents_requested",
+          requirements: [
+            "Health Certificate (within 10 days of travel)",
+            "Vaccination Records (Rabies, DHPP)",
+            "Import Permit (if required by destination)",
+            "IATA Crate Certificate"
+          ]
+        }
+      },
+      crate: {
+        text: "IATA crate selection initiated",
+        payload: {
+          type: "crate_selection",
+          petWeight: 15, // From quote request
+          recommendedSize: "Large (36x25x27)",
+          options: [
+            { size: "Large", dimensions: "36x25x27", price: 25000 },
+            { size: "Extra Large", dimensions: "40x27x30", price: 35000 }
+          ]
+        }
+      }
+    };
+
+    const message = stepMessages[step];
+    
+    convexSendStatus({
+      conversationId: conversationId as Id<"conversations">,
+      senderId: user.id,
+      text: message.text,
+      payload: message.payload,
+    });
+  };
+
   // Define isStaffOrAdmin at component level
   const isStaffOrAdmin = ['admin', 'staff'].includes(user?.role || '');
 
@@ -356,10 +396,53 @@ export const ConversationPage: React.FC = () => {
         );
       } else if (payload.type === 'quote_accepted') {
         return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
-            <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
-              <div className="w-2 h-2 bg-green-600 rounded-full flex-shrink-0"></div>
-              <span className="truncate font-medium">✅ Quote Accepted - Ready to proceed with booking!</span>
+          <div className="flex justify-center my-4 sm:my-6 px-4">
+            <div className="bg-white border-2 border-green-200 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-lg">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                  <div className="w-4 h-4 bg-green-600 rounded-full"></div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-green-800 text-lg">Quote Accepted!</h3>
+                  <p className="text-sm text-green-600">Ready to proceed with booking</p>
+                </div>
+              </div>
+              
+              {/* Next Steps for Admin/Staff */}
+              {isStaffOrAdmin && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-800 text-sm">Next Steps:</h4>
+                  <div className="space-y-2">
+                    <Button
+                      onClick={() => setShowPaymentModal(true)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
+                    >
+                      💳 Request Payment ($2,850)
+                    </Button>
+                    <Button
+                      onClick={() => handleNextStep('documents')}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white text-sm py-2"
+                    >
+                      📋 Request Documents
+                    </Button>
+                    <Button
+                      onClick={() => handleNextStep('crate')}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm py-2"
+                    >
+                      📦 Select IATA Crate
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Status for Customer */}
+              {!isStaffOrAdmin && (
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <p className="text-sm text-green-700">
+                    Great! Our team will contact you shortly with next steps including payment, document requirements, and crate selection.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -369,6 +452,65 @@ export const ConversationPage: React.FC = () => {
             <div className="bg-red-100 text-red-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
               <span className="truncate font-medium">❌ Quote Declined - New quote may be needed</span>
+            </div>
+          </div>
+        );
+      } else if (payload.type === 'documents_requested') {
+        return (
+          <div className="flex justify-center my-4 sm:my-6 px-4">
+            <div className="bg-white border-2 border-amber-200 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-lg">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-amber-800 text-lg">Document Requirements</h3>
+                  <p className="text-sm text-amber-600">Please prepare the following documents</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {payload.requirements?.map((req: string, index: number) => (
+                  <div key={index} className="flex items-start space-x-2">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-sm text-gray-700">{req}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      } else if (payload.type === 'crate_selection') {
+        return (
+          <div className="flex justify-center my-4 sm:my-6 px-4">
+            <div className="bg-white border-2 border-purple-200 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-lg">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                  <Package className="w-4 h-4 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-purple-800 text-lg">IATA Crate Selection</h3>
+                  <p className="text-sm text-purple-600">Recommended for {payload.petWeight}lb pet</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600 mb-3">
+                  <strong>Recommended:</strong> {payload.recommendedSize}
+                </p>
+                
+                {payload.options?.map((option: any, index: number) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-gray-800">{option.size} Crate</p>
+                        <p className="text-sm text-gray-600">{option.dimensions} inches</p>
+                      </div>
+                      <p className="font-bold text-purple-600">{formatCurrency(option.price)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );
