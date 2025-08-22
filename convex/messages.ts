@@ -93,11 +93,13 @@ export const sendStatus = mutation({
     conversationId: v.id("conversations"),
     senderId: v.string(),
     payload: v.any(),
+    text: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: args.senderId,
+      text: args.text,
       kind: "status",
       payload: args.payload,
       createdAt: Date.now(),

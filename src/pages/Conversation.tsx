@@ -200,15 +200,22 @@ export const ConversationPage: React.FC = () => {
   const handleQuoteResponse = (action: 'accept' | 'decline', quoteMessageId: string) => {
     if (!isValidConvexId || !user?.id) return;
     
+    console.log(`Sending quote ${action} response...`); // Debug log
+    
     // Send a status message about the quote response
     convexSendStatus({
       conversationId: conversationId as Id<"conversations">,
       senderId: user.id,
+      text: `Quote ${action}ed by customer`,
       payload: {
         type: `quote_${action}ed`,
         quoteMessageId,
         action,
       },
+    }).then(() => {
+      console.log(`Quote ${action} response sent successfully`);
+    }).catch((error) => {
+      console.error(`Error sending quote ${action} response:`, error);
     });
   };
 
@@ -325,10 +332,22 @@ export const ConversationPage: React.FC = () => {
                 {/* Show status if quote already sent */}
                 {isStaffOrAdmin && activeMessages?.some(msg => msg.kind === 'quote') && (
                   <div className="pt-3 border-t border-gray-200">
-                    <div className="flex items-center justify-center py-2 text-sm text-green-600 bg-green-50 rounded-lg">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                      Quote sent - awaiting customer response
-                    </div>
+                    {/* Check if customer has responded to quote */}
+                    {activeMessages?.some(m => 
+                      m.kind === 'status' && 
+                      ((m.payload as any)?.type === 'quote_accepted' || 
+                       (m.payload as any)?.type === 'quote_declined')
+                    ) ? (
+                      <div className="flex items-center justify-center py-2 text-sm text-blue-600 bg-blue-50 rounded-lg">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                        Customer has responded - check conversation below
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center py-2 text-sm text-green-600 bg-green-50 rounded-lg">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                        Quote sent - awaiting customer response
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -370,8 +389,8 @@ export const ConversationPage: React.FC = () => {
       const isCustomer = user?.role === 'client';
       const hasQuoteResponse = activeMessages?.some(m => 
         m.kind === 'status' && 
-        (m.payload as any)?.type?.includes('quote_accepted') || 
-        (m.payload as any)?.type?.includes('quote_declined')
+        ((m.payload as any)?.type?.includes('quote_accepted') || 
+         (m.payload as any)?.type?.includes('quote_declined'))
       );
       
       return (
