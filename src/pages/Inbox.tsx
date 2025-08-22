@@ -53,8 +53,13 @@ export const InboxPage: React.FC = () => {
   const isLoading = convexConversations === undefined;
   const error = null;
 
-  // Use Convex users data
-  const users = convexUsers;
+  // Transform Convex users data to match expected structure
+  const users = convexUsers?.map((convexUser: any) => ({
+    id: convexUser._id,
+    name: convexUser.name,
+    email: convexUser.email,
+    role: convexUser.role,
+  }));
 
   const filters = ['All', 'Clients', 'Partners'];
 
@@ -72,7 +77,7 @@ export const InboxPage: React.FC = () => {
   };
 
   const getParticipantDetails = (participantIds: string[]) => {
-    if (!users) return { names: [], roles: [] };
+    if (!users) return { participants: [], names: [], roles: [] };
     
     const participants = participantIds
       .map(id => users.find(u => u.id === id))
@@ -157,10 +162,10 @@ export const InboxPage: React.FC = () => {
             data?.map((conversation) => {
               const { participants } = getParticipantDetails(conversation.participantIds);
               
-              // Separate participants by role for cleaner display
-              const clients = participants.filter(p => p.role === 'client');
-              const staff = participants.filter(p => p.role === 'admin' || p.role === 'staff');
-              const partners = participants.filter(p => p.role === 'partner');
+              // Separate participants by role for cleaner display (with safety checks)
+              const clients = participants?.filter(p => p.role === 'client') || [];
+              const staff = participants?.filter(p => p.role === 'admin' || p.role === 'staff') || [];
+              const partners = participants?.filter(p => p.role === 'partner') || [];
               
               return (
                 <Link
