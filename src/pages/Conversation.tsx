@@ -114,7 +114,7 @@ export const ConversationPage: React.FC = () => {
 
   // 🚀 Use Convex for sending quotes
   const convexSendQuote = useConvexMutation(api.messages.sendQuote);
-  
+
   const sendQuoteMutation = useMutation({
     mutationFn: async (data: { templateId: string; priceCents?: number }) => {
       if (!isValidConvexId || !user?.id) throw new Error('Invalid conversation or user');
@@ -202,10 +202,10 @@ export const ConversationPage: React.FC = () => {
         setMessage(''); // Clear message immediately for better UX
       } else {
         // Use existing mock API
-        sendMessageMutation.mutate({
-          kind: 'text',
-          text: message.trim(),
-        });
+      sendMessageMutation.mutate({
+        kind: 'text',
+        text: message.trim(),
+      });
       }
     }
   };
@@ -316,8 +316,8 @@ export const ConversationPage: React.FC = () => {
       if (payload.type === 'payment_requested') {
         const isCustomer = user?.role === 'client';
         
+        // Enhanced payment request card for customers
         if (isCustomer) {
-          // Enhanced payment request card for customers with navigation button
           return (
             <div className="flex justify-center my-4 sm:my-6 px-4">
               <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
@@ -350,17 +350,17 @@ export const ConversationPage: React.FC = () => {
               </div>
             </div>
           );
-        } else {
-          // Simple status message for admin/staff
-          return (
-            <div className="flex justify-center my-3 sm:my-4 px-4">
-              <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
-                <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="truncate">Payment requested: {formatCurrency(payload.amountCents || payload.amount || 0)}</span>
-              </div>
-            </div>
-          );
         }
+        
+        // Simple status message for admin/staff
+        return (
+          <div className="flex justify-center my-3 sm:my-4 px-4">
+            <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">Payment requested: {formatCurrency(payload.amountCents || payload.amount || 0)}</span>
+            </div>
+          </div>
+        );
       } else if (payload.type === 'payment_completed') {
         return (
           <div className="flex justify-center my-3 sm:my-4 px-4">
@@ -490,7 +490,7 @@ export const ConversationPage: React.FC = () => {
                         }}
                         className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 flex items-center justify-center space-x-2"
                       >
-                        <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-4 h-4" />
                         <span>Request Payment ({(() => {
                           const quoteMessage = activeMessages?.find(msg => msg.kind === 'quote');
                           const quoteAmount = quoteMessage ? (quoteMessage.payload as any)?.priceCents / 100 : 4500;
@@ -758,14 +758,14 @@ export const ConversationPage: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
-                    {conversation?.title}
-                  </h1>
+                  {conversation?.title}
+                </h1>
                   {/* 🚀 Convex Status */}
                   <div className="flex items-center space-x-2 text-xs">
                     <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">
                       ⚡ Real-time
                     </span>
-                  </div>
+              </div>
                 </div>
                 {conversation && (
                   <div className="mt-1">
@@ -897,24 +897,24 @@ export const ConversationPage: React.FC = () => {
                 {/* Only show quote and payment buttons for staff/admin */}
                 {isStaffOrAdmin && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuoteModal(true)}
+                <button
+                  type="button"
+                  onClick={() => setShowQuoteModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
-                      title="Insert Quote"
-                    >
+                  title="Insert Quote"
+                >
                       <Quote className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                      type="button"
+                </button>
+                <button
+                  type="button"
                       onClick={() => setShowPaymentModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                       title="Request Payment"
-                    >
+                >
                       <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                      type="button"
+                </button>
+                <button
+                  type="button"
                       onClick={() => setShowProductModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                       title="Recommend Product"
@@ -1046,8 +1046,8 @@ export const ConversationPage: React.FC = () => {
           </div>
 
           {/* Redesigned quote template cards */}
-          <div className="space-y-4">
-            {quoteTemplates?.map((template) => (
+        <div className="space-y-4">
+          {quoteTemplates?.map((template) => (
               <div key={template._id} className="group border-2 border-gray-100 rounded-xl p-6 hover:border-[#F3C0CF] hover:shadow-lg transition-all duration-200 bg-white">
                 {/* Header with title and price */}
                 <div className="flex items-start justify-between mb-4">
@@ -1061,7 +1061,7 @@ export const ConversationPage: React.FC = () => {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-3xl font-bold text-[#0E2A47] leading-none">
-                      {formatCurrency(template.defaultPriceCents)}
+                  {formatCurrency(template.defaultPriceCents)}
                     </div>
                   </div>
                 </div>
@@ -1075,9 +1075,9 @@ export const ConversationPage: React.FC = () => {
                 
                 {/* Action button - full width and prominent */}
                 <div className="pt-4 border-t border-gray-100">
-                  <Button
+                <Button
                     onClick={() => handleSendQuote(template._id)}
-                    disabled={sendQuoteMutation.isPending}
+                  disabled={sendQuoteMutation.isPending}
                     className="w-full bg-[#F3C0CF] hover:bg-[#E8A5B8] text-[#0E2A47] font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 text-base"
                   >
                     {sendQuoteMutation.isPending ? (
@@ -1091,10 +1091,10 @@ export const ConversationPage: React.FC = () => {
                         <span>Send This Quote</span>
                       </div>
                     )}
-                  </Button>
-                </div>
+                </Button>
               </div>
-            ))}
+            </div>
+          ))}
           </div>
 
           {(!quoteTemplates || quoteTemplates.length === 0) && (
