@@ -311,7 +311,7 @@ export const ConversationPage: React.FC = () => {
     const isSystem = msg.senderId === 'system';
     const isCurrentUser = msg.senderId === user?.id;
 
-    if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_'))) {
+    if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_') || (msg.payload as any)?.type?.includes('payment_'))) {
       const payload = msg.payload as any;
       if (payload.type === 'payment_requested') {
         const isCustomer = user?.role === 'client';
