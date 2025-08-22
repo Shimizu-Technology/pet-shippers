@@ -27,14 +27,11 @@ export const CustomerDashboardPage: React.FC = () => {
   });
   const { user } = useAuth();
 
-  // Convex test queries
-  const convexUsers = useConvexQuery(api.users.list);
+  // Convex queries for dashboard data
   const convexConversations = useConvexQuery(
     api.conversations.list, 
     user ? { userId: user.id, userRole: user.role } : "skip"
   );
-  const seedUsers = useConvexMutation(api.seedData.seedUsers);
-  const seedAllData = useConvexMutation(api.seedData.seedAllData);
 
   // 🚀 Use Convex queries instead of mock API
   const convexShipments = useConvexQuery(
@@ -150,44 +147,7 @@ export const CustomerDashboardPage: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-        {/* Convex Test Section */}
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
-          <h3 className="font-bold text-blue-800 mb-2">🚀 Convex Integration Test</h3>
-          <div className="text-sm text-blue-700 mb-2 space-y-1">
-            <p>Convex Users: {convexUsers ? `${convexUsers.length} users found` : 'Loading...'}</p>
-            <p>Convex Conversations: {convexConversations ? `${convexConversations.length} conversations found` : 'Loading...'}</p>
-            {convexConversations && convexConversations.length > 0 && (
-              <div className="mt-2">
-                <p className="font-medium text-blue-800">Available Convex Conversations:</p>
-                {convexConversations.map((conv: any) => (
-                  <div key={conv._id} className="ml-2 mt-1">
-                    <Link 
-                      to={`/app/inbox/${conv._id}`}
-                      className="text-blue-600 hover:text-blue-800 underline text-xs"
-                    >
-                      📧 {conv.title}
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button 
-              onClick={() => seedUsers({})}
-              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1"
-            >
-              Seed Users
-            </Button>
-            <Button 
-              onClick={() => seedAllData({})}
-              className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1"
-            >
-              Seed All Data
-            </Button>
 
-          </div>
-        </div>
 
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

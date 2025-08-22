@@ -120,40 +120,44 @@ cd pet-shippers
 npm install
 ```
 
-### **2. Set Up Convex Backend**
-```bash
-# Install Convex CLI globally
-npm install -g convex
+### **2. Start the Application**
 
+#### **Option A: Quick Start (Recommended)**
+```bash
+# Terminal 1: Start Convex backend
+npx convex dev
+# When prompted, select "choose an existing project" → "pet-shippers"
+
+# Terminal 2: Start React frontend  
+npm run dev
+```
+
+#### **Option B: First Time Setup**
+If you don't have a Convex account or project yet:
+```bash
 # Login to Convex (creates account if needed)
 npx convex login
 
 # Start local development server
 npx convex dev
-```
+# Select "choose an existing project" → "pet-shippers"
+# OR "create a new project" if pet-shippers isn't available
 
-### **3. Configure Environment**
-Create `.env.local` file:
-```env
-# Local development Convex URL
-VITE_CONVEX_URL=http://127.0.0.1:3210
-```
-
-### **4. Seed Development Data**
-```bash
 # In a separate terminal, seed the database
 npx convex run seedData:seedAllData
-```
 
-### **5. Start Frontend Development**
-```bash
-# In another terminal
+# In another terminal, start frontend
 npm run dev
 ```
 
-Visit `http://localhost:5173` to see the app.
+### **3. Access Your Local App**
+- **Frontend:** http://localhost:5173
+- **Convex Backend:** http://127.0.0.1:3210  
+- **Convex Dashboard:** http://127.0.0.1:6790
 
-### **6. Test User Accounts**
+The `.env.local` file will be automatically created with the correct Convex URL.
+
+### **4. Test User Accounts**
 - **Admin**: `admin@example.com` (any password)
 - **Staff**: `staff@example.com` (any password)  
 - **Client**: `client@example.com` (any password)
