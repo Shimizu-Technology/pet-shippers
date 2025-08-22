@@ -286,8 +286,13 @@ export const ConversationPage: React.FC = () => {
     const isSystem = msg.senderId === 'system';
     const isCurrentUser = msg.senderId === user?.id;
 
-    if (msg.kind === 'status' && isSystem) {
+    if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_'))) {
       const payload = msg.payload as any;
+      
+      // Debug: Log quote-related status messages
+      if (payload.type?.includes('quote_')) {
+        console.log('Quote status message:', { type: payload.type, senderId: msg.senderId, isSystem });
+      }
       if (payload.type === 'payment_requested') {
         return (
           <div className="flex justify-center my-3 sm:my-4 px-4">
