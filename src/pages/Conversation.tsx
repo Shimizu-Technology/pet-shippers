@@ -340,7 +340,7 @@ export const ConversationPage: React.FC = () => {
                 
                 <div className="border-t border-gray-200 pt-4">
                   <Link 
-                    to="/billing"
+                    to="/portal/billing"
                     className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                   >
                     <DollarSign className="w-4 h-4" />
