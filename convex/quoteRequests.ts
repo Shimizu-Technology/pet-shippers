@@ -18,6 +18,15 @@ export const create = mutation({
     customerUserId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get customer user data for shipment record
+    const customer = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("_id"), args.customerUserId))
+      .first();
+    
+    const customerName = customer?.name || "Customer";
+    const customerEmail = customer?.email;
+
     // Create the quote request
     const quoteRequestId = await ctx.db.insert("quoteRequests", {
       petName: args.petName,
@@ -41,7 +50,23 @@ export const create = mutation({
       lastMessageAt: Date.now(),
     });
 
-    // Create an initial system message in the conversation
+    // Create a shipment record for this quote request
+    const shipmentId = await ctx.db.insert("shipments", {
+      conversationId,
+      petName: args.petName,
+      petType: args.petType,
+      petBreed: args.petBreed,
+      petWeight: args.petWeight,
+      ownerName: customerName,
+      ownerEmail: customerEmail,
+      route: args.route,
+      status: "quote_requested",
+      specialInstructions: args.specialRequirements,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Create an initial system message in the conversation with full quote details
     await ctx.db.insert("messages", {
       conversationId,
       senderId: "system",
@@ -50,14 +75,19 @@ export const create = mutation({
       payload: {
         type: "quote_requested",
         quoteRequestId,
+        shipmentId,
         petName: args.petName,
+        petType: args.petType,
+        petBreed: args.petBreed,
+        petWeight: args.petWeight,
         route: args.route,
-        travelDate: args.preferredTravelDate,
+        preferredTravelDate: args.preferredTravelDate,
+        specialRequirements: args.specialRequirements,
       },
       createdAt: Date.now(),
     });
 
-    return { quoteRequestId, conversationId };
+    return { quoteRequestId, conversationId, shipmentId };
   },
 });
 
