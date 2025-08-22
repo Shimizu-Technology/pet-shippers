@@ -15,7 +15,7 @@ export type Conversation = {
   kind: 'client' | 'partner' | 'internal';
 };
 
-export type MessageKind = 'text' | 'image' | 'file' | 'quote' | 'status';
+export type MessageKind = 'text' | 'image' | 'file' | 'quote' | 'product' | 'status';
 
 export type Message = {
   id: string;

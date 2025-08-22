@@ -312,7 +312,41 @@ export function setupMockApi() {
     if (conv) {
       conv.lastMessageAt = msg.createdAt;
     }
+
+    return [201, { message: msg }];
+  });
+
+  mock.onPost(/\/conversations\/[^/]+\/products/).reply((config) => {
+    const id = config.url!.split('/')[2];
+    const body = JSON.parse(config.data || '{}'); // {productId}
+    const product = seed.products.find(p => p.id === body.productId);
+    const currentUser = getCurrentUser();
     
+    if (!product) {
+      return [404, { error: 'Product not found' }];
+    }
+    
+    const msg = {
+      id: uuid(), 
+      conversationId: id, 
+      senderId: currentUser?.id || 'u_staff',
+      createdAt: new Date().toISOString(), 
+      kind: 'product' as const,
+      payload: { 
+        productId: product.id,
+        productName: product.name,
+        productSku: product.sku,
+        priceCents: product.priceCents
+      }
+    };
+    seed.messages.push(msg);
+    
+    // Update conversation lastMessageAt
+    const conv = seed.conversations.find(c => c.id === id);
+    if (conv) {
+      conv.lastMessageAt = msg.createdAt;
+    }
+
     return [201, { message: msg }];
   });
 

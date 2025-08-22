@@ -12,10 +12,11 @@ import {
   Package,
   Calendar,
   Download,
-  Users
+  Users,
+  ShoppingCart
 } from 'lucide-react';
 import { http } from '../lib/http';
-import { Message, QuoteTemplate, Shipment, Document, Conversation, User } from '../types';
+import { Message, QuoteTemplate, Shipment, Document, Conversation, User, Product } from '../types';
 import { formatDate, formatCurrency, getStatusColor, getStatusLabel, formatRelativeTime } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
@@ -28,6 +29,7 @@ export const ConversationPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
   const [showMobileShipmentDetails, setShowMobileShipmentDetails] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -84,6 +86,14 @@ export const ConversationPage: React.FC = () => {
     },
   });
 
+  const { data: products } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const response = await http.get('/products');
+      return response.data.products as Product[];
+    },
+  });
+
   const sendMessageMutation = useMutation({
     mutationFn: (messageData: any) => 
       http.post(`/conversations/${conversationId}/messages`, messageData),
@@ -101,6 +111,16 @@ export const ConversationPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setShowQuoteModal(false);
+    },
+  });
+
+  const sendProductMutation = useMutation({
+    mutationFn: (productId: string) =>
+      http.post(`/conversations/${conversationId}/products`, { productId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setShowProductModal(false);
     },
   });
 
@@ -216,6 +236,39 @@ export const ConversationPage: React.FC = () => {
                 <p className="text-xl sm:text-2xl font-bold text-[#0E2A47] mt-1">
                   {formatCurrency(payload.priceCents)}
                 </p>
+                <p className="text-xs text-gray-500 mt-2">{formatDate(msg.createdAt)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (msg.kind === 'product') {
+      const payload = msg.payload as any;
+      const isCustomer = user?.role === 'client';
+      return (
+        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4`}>
+          <div className="max-w-[280px] sm:max-w-xs lg:max-w-md bg-white border border-brand-coral rounded-lg p-3 sm:p-4 shadow-sm">
+            <div className="flex items-start space-x-2 sm:space-x-3">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-brand-coral flex items-center justify-center flex-shrink-0">
+                <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-medium text-brand-navy text-sm sm:text-base">{payload.productName}</h4>
+                <p className="text-xs text-gray-600">SKU: {payload.productSku}</p>
+                <p className="text-xl sm:text-2xl font-bold text-brand-navy mt-1">
+                  {formatCurrency(payload.priceCents)}
+                </p>
+                {isCustomer && (
+                  <Button
+                    onClick={() => requestPaymentMutation.mutate(payload.priceCents / 100)}
+                    disabled={requestPaymentMutation.isPending}
+                    className="mt-3 w-full bg-brand-coral hover:bg-red-500 text-white text-sm py-2"
+                  >
+                    {requestPaymentMutation.isPending ? 'Processing...' : 'Add to Order'}
+                  </Button>
+                )}
                 <p className="text-xs text-gray-500 mt-2">{formatDate(msg.createdAt)}</p>
               </div>
             </div>
@@ -399,6 +452,14 @@ export const ConversationPage: React.FC = () => {
                     >
                       <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowProductModal(true)}
+                      className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
+                      title="Recommend Product"
+                    >
+                      <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
                   </>
                 )}
                 <button
@@ -560,6 +621,72 @@ export const ConversationPage: React.FC = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-2">No Quote Templates</h3>
               <p className="text-gray-600 mb-4">
                 Create quote templates in the Admin section to send quotes to customers.
+              </p>
+              <Link
+                to="/app/admin"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-[#0E2A47] bg-[#F3C0CF] hover:bg-[#F3C0CF]/90"
+              >
+                Go to Admin
+              </Link>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Product Recommendation Modal */}
+      <Modal
+        isOpen={showProductModal}
+        onClose={() => setShowProductModal(false)}
+        title="Recommend Product"
+        size="lg"
+      >
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+          <p className="text-sm text-blue-800">
+            <strong>Recommend a product to your customer.</strong> They'll see the product details and can purchase it directly from the conversation.
+          </p>
+        </div>
+
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {products?.filter(p => p.active).map((product) => (
+            <div
+              key={product.id}
+              className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{product.name}</h3>
+                  <p className="text-sm text-gray-600">SKU: {product.sku}</p>
+                  <p className="text-lg font-bold text-green-600 mt-1">
+                    {formatCurrency(product.priceCents)}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => sendProductMutation.mutate(product.id)}
+                  disabled={sendProductMutation.isPending}
+                  className="ml-4"
+                >
+                  {sendProductMutation.isPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="w-4 h-4 mr-2" />
+                      Recommend
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {(!products || products.filter(p => p.active).length === 0) && (
+            <div className="text-center py-8">
+              <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Products Available</h3>
+              <p className="text-gray-600 mb-4">
+                Add products in the Admin section to recommend them to customers.
               </p>
               <Link
                 to="/app/admin"
