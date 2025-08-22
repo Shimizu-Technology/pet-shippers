@@ -194,6 +194,24 @@ export const ConversationPage: React.FC = () => {
     }
   };
 
+  // 🚀 Use Convex for sending status messages
+  const convexSendStatus = useConvexMutation(api.messages.sendStatus);
+
+  const handleQuoteResponse = (action: 'accept' | 'decline', quoteMessageId: string) => {
+    if (!isValidConvexId || !user?.id) return;
+    
+    // Send a status message about the quote response
+    convexSendStatus({
+      conversationId: conversationId as Id<"conversations">,
+      senderId: user.id,
+      payload: {
+        type: `quote_${action}ed`,
+        quoteMessageId,
+        action,
+      },
+    });
+  };
+
   // Define isStaffOrAdmin at component level
   const isStaffOrAdmin = ['admin', 'staff'].includes(user?.role || '');
 
@@ -292,8 +310,8 @@ export const ConversationPage: React.FC = () => {
                   </div>
                 )}
                 
-                {/* Generate Quote Button for Admin/Staff */}
-                {isStaffOrAdmin && (
+                {/* Generate Quote Button for Admin/Staff - Only show if no quote sent yet */}
+                {isStaffOrAdmin && !activeMessages?.some(msg => msg.kind === 'quote') && (
                   <div className="pt-3 border-t border-gray-200">
                     <Button 
                       onClick={() => setShowQuoteModal(true)}
@@ -303,7 +321,35 @@ export const ConversationPage: React.FC = () => {
                     </Button>
                   </div>
                 )}
+                
+                {/* Show status if quote already sent */}
+                {isStaffOrAdmin && activeMessages?.some(msg => msg.kind === 'quote') && (
+                  <div className="pt-3 border-t border-gray-200">
+                    <div className="flex items-center justify-center py-2 text-sm text-green-600 bg-green-50 rounded-lg">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      Quote sent - awaiting customer response
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
+          </div>
+        );
+      } else if (payload.type === 'quote_accepted') {
+        return (
+          <div className="flex justify-center my-3 sm:my-4 px-4">
+            <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <div className="w-2 h-2 bg-green-600 rounded-full flex-shrink-0"></div>
+              <span className="truncate font-medium">✅ Quote Accepted - Ready to proceed with booking!</span>
+            </div>
+          </div>
+        );
+      } else if (payload.type === 'quote_declined') {
+        return (
+          <div className="flex justify-center my-3 sm:my-4 px-4">
+            <div className="bg-red-100 text-red-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
+              <span className="truncate font-medium">❌ Quote Declined - New quote may be needed</span>
             </div>
           </div>
         );
@@ -321,20 +367,66 @@ export const ConversationPage: React.FC = () => {
 
     if (msg.kind === 'quote') {
       const payload = msg.payload as any;
+      const isCustomer = user?.role === 'client';
+      const hasQuoteResponse = activeMessages?.some(m => 
+        m.kind === 'status' && 
+        (m.payload as any)?.type?.includes('quote_accepted') || 
+        (m.payload as any)?.type?.includes('quote_declined')
+      );
+      
       return (
-        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4`}>
-          <div className="max-w-[280px] sm:max-w-xs lg:max-w-md bg-white border border-[#8EB9D4] rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="flex items-start space-x-2 sm:space-x-3">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-[#8EB9D4] flex items-center justify-center flex-shrink-0">
-                <Quote className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6`}>
+          <div className="max-w-[320px] sm:max-w-sm lg:max-w-lg bg-white border-2 border-[#8EB9D4] rounded-xl p-4 sm:p-6 shadow-lg">
+            <div className="flex items-start space-x-3 mb-4">
+              <div className="w-8 h-8 rounded-full bg-[#8EB9D4] flex items-center justify-center flex-shrink-0">
+                <Quote className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-[#0E2A47] text-sm sm:text-base">{payload.title}</h4>
-                <p className="text-xl sm:text-2xl font-bold text-[#0E2A47] mt-1">
+                <h4 className="font-semibold text-[#0E2A47] text-base sm:text-lg">{payload.title}</h4>
+                <p className="text-2xl sm:text-3xl font-bold text-[#0E2A47] mt-1">
                   {formatCurrency(payload.priceCents)}
                 </p>
-                <p className="text-xs text-gray-500 mt-2">{formatDate(msg.createdAt)}</p>
               </div>
+            </div>
+            
+            {/* Quote description */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {payload.body}
+              </p>
+            </div>
+            
+            {/* Customer action buttons - only show if customer and no response yet */}
+            {isCustomer && !hasQuoteResponse && (
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={() => handleQuoteResponse('accept', msg.id)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5"
+                  >
+                    Accept Quote
+                  </Button>
+                  <Button
+                    onClick={() => handleQuoteResponse('decline', msg.id)}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2.5"
+                  >
+                    Decline Quote
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {/* Show response status if already responded */}
+            {hasQuoteResponse && (
+              <div className="pt-4 border-t border-gray-200">
+                <div className="text-center py-2 text-sm text-gray-600 bg-gray-50 rounded-lg">
+                  Quote response submitted
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-3 text-xs text-gray-500 text-right">
+              {formatDate(msg.createdAt)}
             </div>
           </div>
         </div>
