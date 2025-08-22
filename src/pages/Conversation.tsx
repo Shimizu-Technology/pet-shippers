@@ -63,6 +63,12 @@ export const ConversationPage: React.FC = () => {
   const convexProducts = useConvexQuery(api.products.listActive, useConvex ? {} : "skip");
   
   const convexQuoteTemplates = useConvexQuery(api.quoteTemplates.list, useConvex ? {} : "skip");
+  
+  // 🚀 Get shipment data for this conversation
+  const convexShipments = useConvexQuery(
+    api.shipments.list,
+    (useConvex && user) ? { userId: user.id, userRole: user.role } : "skip"
+  );
 
   // Utility to normalize Convex data to match our existing types
   const normalizeConvexMessage = (convexMsg: any): Message => ({
@@ -95,9 +101,9 @@ export const ConversationPage: React.FC = () => {
   // Transform Convex data to match existing types
   const users = convexUsers;
   
-  // For now, use empty arrays for data we haven't migrated yet
-  const shipment: Shipment | null = null; // TODO: Add Convex shipment query
-  const documents: Document[] = [];
+  // Get shipment data for this conversation
+  const shipment = convexShipments?.find(ship => ship.conversationId === conversationId) || null;
+  const documents: Document[] = []; // TODO: Add Convex documents query
 
   // 🚀 CONVEX REAL-TIME MUTATIONS (New!)
   const convexSendMessage = useConvexMutation(api.messages.send);
@@ -157,11 +163,21 @@ export const ConversationPage: React.FC = () => {
     mutationFn: async (amount: number) => {
       if (!conversationId || !user?.id) throw new Error('Missing required data');
       
+      // Create meaningful description based on available context
+      let description = `Payment request for pet shipping services`;
+      
+      if (shipment) {
+        const route = `${shipment.route?.from || 'Origin'} → ${shipment.route?.to || 'Destination'}`;
+        description = `Pet shipping for ${shipment.petName} (${route})`;
+      } else if (conversation) {
+        description = `Pet shipping services - ${conversation.title}`;
+      }
+      
       // Create payment request in Convex
       const paymentId = await convexCreatePaymentRequest({
         conversationId: conversationId as Id<"conversations">,
         amountCents: Math.round(amount * 100), // Convert dollars to cents
-        description: `Payment request for pet shipping services - $${amount.toFixed(2)}`,
+        description: description,
       });
 
       // Send status message to conversation

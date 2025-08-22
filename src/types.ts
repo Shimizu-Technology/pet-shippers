@@ -94,5 +94,15 @@ export type PaymentRequest = {
   conversationId: string; 
   amountCents: number; 
   status: 'requested' | 'paid';
+  description?: string;
   createdAt: string;
+  paidAt?: string;
+  context?: {
+    conversation?: any;
+    shipment?: any;
+    title: string;
+    petName?: string;
+    route?: { from: string; to: string };
+    petType?: string;
+  };
 };

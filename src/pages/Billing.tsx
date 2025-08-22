@@ -5,14 +5,43 @@ import { PaymentRequest } from '../types';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
+import { useAuth } from '../contexts/AuthContext';
 // Convex imports for real-time payment data
 import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
 export const BillingPage: React.FC = () => {
+  const { user } = useAuth();
+  
   // 🚀 Use Convex for real-time payment data
   const convexPaymentRequests = useConvexQuery(api.payments.list, {});
+  
+  // 🚀 Fetch additional context data
+  const convexConversations = useConvexQuery(
+    api.conversations.list, 
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
+  const convexShipments = useConvexQuery(
+    api.shipments.list, 
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
+  
+  // Helper function to get context for a payment request
+  const getPaymentContext = (paymentRequest: any) => {
+    const conversation = convexConversations?.find(conv => conv._id === paymentRequest.conversationId);
+    const shipment = convexShipments?.find(ship => ship.conversationId === paymentRequest.conversationId);
+    
+    return {
+      conversation,
+      shipment,
+      title: shipment ? `${shipment.petName} (${shipment.route?.from || 'Origin'} → ${shipment.route?.to || 'Destination'})` 
+                     : conversation?.title || 'Pet Shipping Services',
+      petName: shipment?.petName,
+      route: shipment?.route,
+      petType: shipment?.petType,
+    };
+  };
   
   // Transform Convex data to match existing types
   const paymentRequests = convexPaymentRequests?.map((convexPayment: any) => ({
@@ -23,9 +52,11 @@ export const BillingPage: React.FC = () => {
     description: convexPayment.description,
     createdAt: new Date(convexPayment.createdAt).toISOString(),
     paidAt: convexPayment.paidAt ? new Date(convexPayment.paidAt).toISOString() : undefined,
+    // Add context data
+    context: getPaymentContext(convexPayment),
   })) || [];
 
-  const isLoading = convexPaymentRequests === undefined;
+  const isLoading = convexPaymentRequests === undefined || convexConversations === undefined || convexShipments === undefined;
 
   // 🚀 Use Convex mutations for payments and status messages
   const convexMarkPaid = useConvexMutation(api.payments.markPaid);
@@ -142,10 +173,15 @@ export const BillingPage: React.FC = () => {
                               <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                             </div>
                             <div className="min-w-0">
-                              <h3 className="font-medium text-[#0E2A47] text-sm sm:text-base">Payment Request</h3>
+                              <h3 className="font-medium text-[#0E2A47] text-sm sm:text-base">{request.context.title}</h3>
                               <p className="text-xs sm:text-sm text-gray-600 truncate">
                                 Requested on {formatDate(request.createdAt)}
                               </p>
+                              {request.context.petType && (
+                                <p className="text-xs text-gray-500 capitalize">
+                                  {request.context.petType} shipping service
+                                </p>
+                              )}
                             </div>
                           </div>
                           <p className="text-xl sm:text-2xl font-bold text-[#0E2A47] mb-2">
@@ -186,11 +222,16 @@ export const BillingPage: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <h3 className="font-medium text-[#0E2A47] text-sm sm:text-base">
-                                {formatCurrency(request.amountCents)}
+                                {request.context.title}
                               </h3>
                               <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                Paid on {formatDate(request.createdAt)}
+                                {formatCurrency(request.amountCents)} • Paid on {formatDate(request.paidAt || request.createdAt)}
                               </p>
+                              {request.context.petType && (
+                                <p className="text-xs text-gray-500 capitalize">
+                                  {request.context.petType} shipping service
+                                </p>
+                              )}
                             </div>
                           </div>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
