@@ -148,15 +148,38 @@ export const ConversationPage: React.FC = () => {
     },
   });
 
+  // 🚀 Use Convex mutation for payment requests
+  const convexCreatePaymentRequest = useConvexMutation(api.payments.createRequest);
+
   const requestPaymentMutation = useMutation({
-    mutationFn: (amount: number) =>
-      http.post('/orders', { conversationId, amount }),
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    mutationFn: async (amount: number) => {
+      if (!conversationId || !user?.id) throw new Error('Missing required data');
+      
+      // Create payment request in Convex
+      const paymentId = await convexCreatePaymentRequest({
+        conversationId: conversationId as Id<"conversations">,
+        amountCents: Math.round(amount * 100), // Convert dollars to cents
+        description: `Payment request for pet shipping services - $${amount.toFixed(2)}`,
+      });
+
+      // Send status message to conversation
+      await convexSendStatus({
+        conversationId: conversationId as Id<"conversations">,
+        senderId: user.id,
+        text: `Payment request sent: $${amount.toFixed(2)}`,
+        payload: {
+          type: 'payment_requested',
+          paymentId,
+          amountCents: Math.round(amount * 100),
+          description: `Payment request for pet shipping services`,
+        },
+      });
+
+      return { paymentId };
+    },
+    onSuccess: () => {
+      // No need to invalidate queries - Convex updates automatically!
       setShowPaymentModal(false);
-      // In a real app, you'd redirect to the checkout URL
-      alert(`Payment request created! Checkout URL: ${response.data.checkoutUrl}`);
     },
   });
 
