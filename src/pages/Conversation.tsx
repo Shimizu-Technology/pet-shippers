@@ -35,6 +35,7 @@ export const ConversationPage: React.FC = () => {
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [showMobileShipmentDetails, setShowMobileShipmentDetails] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -148,8 +149,9 @@ export const ConversationPage: React.FC = () => {
     },
   });
 
-  // 🚀 Use Convex mutation for payment requests
+  // 🚀 Use Convex mutations for payment requests and status messages
   const convexCreatePaymentRequest = useConvexMutation(api.payments.createRequest);
+  const convexSendStatus = useConvexMutation(api.messages.sendStatus);
 
   const requestPaymentMutation = useMutation({
     mutationFn: async (amount: number) => {
@@ -170,7 +172,7 @@ export const ConversationPage: React.FC = () => {
         payload: {
           type: 'payment_requested',
           paymentId,
-          amountCents: Math.round(amount * 100),
+          amountCents: Math.round(amount * 100), // Convert dollars to cents for storage
           description: `Payment request for pet shipping services`,
         },
       });
@@ -218,8 +220,7 @@ export const ConversationPage: React.FC = () => {
     }
   };
 
-  // 🚀 Use Convex for sending status messages
-  const convexSendStatus = useConvexMutation(api.messages.sendStatus);
+  // 🚀 Use Convex for sending status messages (shared for quote responses and payment requests)
 
   const handleQuoteResponse = (action: 'accept' | 'decline', quoteMessageId: string) => {
     if (!isValidConvexId || !user?.id) return;
@@ -439,11 +440,21 @@ export const ConversationPage: React.FC = () => {
                     <h4 className="font-medium text-[#0E2A47] text-sm mb-3">Next Steps:</h4>
                     <div className="space-y-2">
                       <Button
-                        onClick={() => setShowPaymentModal(true)}
+                        onClick={() => {
+                          // Find the quote message to get the actual amount
+                          const quoteMessage = activeMessages?.find(msg => msg.kind === 'quote');
+                          const quoteAmount = quoteMessage ? (quoteMessage.payload as any)?.priceCents / 100 : 4500;
+                          setPaymentAmount(quoteAmount);
+                          setShowPaymentModal(true);
+                        }}
                         className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 flex items-center justify-center space-x-2"
                       >
                         <DollarSign className="w-4 h-4" />
-                        <span>Request Payment ($4,500)</span>
+                        <span>Request Payment ({(() => {
+                          const quoteMessage = activeMessages?.find(msg => msg.kind === 'quote');
+                          const quoteAmount = quoteMessage ? (quoteMessage.payload as any)?.priceCents / 100 : 4500;
+                          return formatCurrency(quoteAmount * 100);
+                        })()})</span>
                       </Button>
                       <Button
                         onClick={() => handleNextStep('documents')}
@@ -1142,6 +1153,7 @@ export const ConversationPage: React.FC = () => {
         <PaymentRequestForm 
           onSubmit={(amount) => requestPaymentMutation.mutate(amount)}
           isLoading={requestPaymentMutation.isPending}
+          defaultAmount={paymentAmount}
         />
       </Modal>
     </Layout>
@@ -1151,14 +1163,22 @@ export const ConversationPage: React.FC = () => {
 const PaymentRequestForm: React.FC<{
   onSubmit: (amount: number) => void;
   isLoading: boolean;
-}> = ({ onSubmit, isLoading }) => {
-  const [amount, setAmount] = useState('');
+  defaultAmount?: number;
+}> = ({ onSubmit, isLoading, defaultAmount = 0 }) => {
+  const [amount, setAmount] = useState(defaultAmount > 0 ? defaultAmount.toString() : '');
+
+  // Update amount when defaultAmount changes
+  useEffect(() => {
+    if (defaultAmount > 0) {
+      setAmount(defaultAmount.toString());
+    }
+  }, [defaultAmount]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const amountInCents = Math.round(parseFloat(amount) * 100);
-    if (amountInCents > 0) {
-      onSubmit(amountInCents);
+    const amountInDollars = parseFloat(amount);
+    if (amountInDollars > 0) {
+      onSubmit(amountInDollars); // Pass dollars, not cents
     }
   };
 
