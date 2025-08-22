@@ -8,6 +8,9 @@ import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
+// Convex imports for backfill function
+import { useMutation as useConvexMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 export const AdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'templates' | 'products'>('templates');
@@ -15,7 +18,25 @@ export const AdminPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuoteTemplate | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [backfillResult, setBackfillResult] = useState<string>('');
   const queryClient = useQueryClient();
+
+  // 🚀 Convex backfill function
+  const backfillShipments = useConvexMutation(api.seedData.backfillMissingShipments);
+
+  const handleBackfillShipments = async () => {
+    try {
+      const result = await backfillShipments({});
+      setBackfillResult(result);
+      // Refresh the page after a short delay to see the new shipments
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      console.error('Backfill failed:', error);
+      setBackfillResult('Backfill failed: ' + (error as Error).message);
+    }
+  };
 
   const { data: quoteTemplates, isLoading: templatesLoading } = useQuery({
     queryKey: ['quote-templates'],
@@ -106,6 +127,25 @@ export const AdminPage: React.FC = () => {
     <Layout>
       <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
         <h1 className="text-xl sm:text-2xl font-bold text-[#0E2A47] mb-4 sm:mb-6">Admin Dashboard</h1>
+
+        {/* 🚀 Temporary Backfill Function */}
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h3 className="text-sm font-medium text-yellow-800 mb-2">🔧 Data Backfill</h3>
+          <p className="text-xs text-yellow-700 mb-3">
+            Create missing shipment records for existing quote requests (one-time fix)
+          </p>
+          <div className="flex items-center space-x-3">
+            <Button
+              onClick={handleBackfillShipments}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-3 py-1"
+            >
+              Backfill Missing Shipments
+            </Button>
+            {backfillResult && (
+              <span className="text-sm text-yellow-800 font-medium">{backfillResult}</span>
+            )}
+          </div>
+        </div>
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-4 sm:mb-6">

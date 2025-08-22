@@ -215,3 +215,79 @@ export const seedAllData = mutation({
     return `Seeded complete test data: users, conversation, messages, shipment, products, and quote templates`;
   },
 });
+
+// Backfill shipment records for existing quote requests that don't have them
+export const backfillMissingShipments = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Get all conversations
+    const conversations = await ctx.db.query("conversations").collect();
+    
+    // Get all existing shipments to check which conversations already have them
+    const existingShipments = await ctx.db.query("shipments").collect();
+    const conversationsWithShipments = new Set(existingShipments.map(s => s.conversationId));
+    
+    let shipmentsCreated = 0;
+    
+    for (const conversation of conversations) {
+      // Skip if this conversation already has a shipment
+      if (conversationsWithShipments.has(conversation._id)) {
+        continue;
+      }
+      
+      // Look for quote request messages in this conversation
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversationId", conversation._id))
+        .collect();
+      
+      // Find the first quote request message with payload data
+      const quoteRequestMessage = messages.find(msg => 
+        msg.kind === "status" && 
+        msg.payload && 
+        msg.payload.type === "quote_requested"
+      );
+      
+      if (quoteRequestMessage && quoteRequestMessage.payload) {
+        const payload = quoteRequestMessage.payload;
+        
+        // Get customer info from the conversation participants
+        const customerUserId = conversation.participantIds.find(id => id !== "system");
+        let customerName = "Customer";
+        let customerEmail = undefined;
+        
+        if (customerUserId) {
+          const customer = await ctx.db
+            .query("users")
+            .filter((q) => q.eq(q.field("_id"), customerUserId))
+            .first();
+          
+          if (customer) {
+            customerName = customer.name;
+            customerEmail = customer.email;
+          }
+        }
+        
+        // Create shipment record from the quote request data
+        await ctx.db.insert("shipments", {
+          conversationId: conversation._id,
+          petName: payload.petName || "Pet",
+          petType: payload.petType || "other",
+          petBreed: payload.petBreed || "",
+          petWeight: payload.petWeight || 0,
+          ownerName: customerName,
+          ownerEmail: customerEmail,
+          route: payload.route || { from: "Unknown", to: "Unknown" },
+          status: "quote_requested",
+          specialInstructions: payload.specialRequirements || "",
+          createdAt: conversation.lastMessageAt || Date.now(),
+          updatedAt: conversation.lastMessageAt || Date.now(),
+        });
+        
+        shipmentsCreated++;
+      }
+    }
+    
+    return `Backfill completed: ${shipmentsCreated} shipment records created`;
+  },
+});
