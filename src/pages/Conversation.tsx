@@ -13,7 +13,8 @@ import {
   Calendar,
   Download,
   ShoppingCart,
-  Plus
+  Plus,
+  CheckCircle
 } from 'lucide-react';
 import { http } from '../lib/http';
 import { Message, QuoteTemplate, Shipment, Document, User } from '../types';
@@ -288,11 +289,6 @@ export const ConversationPage: React.FC = () => {
 
     if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_'))) {
       const payload = msg.payload as any;
-      
-      // Debug: Log quote-related status messages
-      if (payload.type?.includes('quote_')) {
-        console.log('Quote status message:', { type: payload.type, senderId: msg.senderId, isSystem });
-      }
       if (payload.type === 'payment_requested') {
         return (
           <div className="flex justify-center my-3 sm:my-4 px-4">
@@ -402,49 +398,54 @@ export const ConversationPage: React.FC = () => {
       } else if (payload.type === 'quote_accepted') {
         return (
           <div className="flex justify-center my-4 sm:my-6 px-4">
-            <div className="bg-white border-2 border-green-200 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-lg">
+            <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                  <div className="w-4 h-4 bg-green-600 rounded-full"></div>
+                <div className="w-8 h-8 rounded-full bg-[#F3C0CF] flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-[#0E2A47]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-green-800 text-lg">Quote Accepted!</h3>
-                  <p className="text-sm text-green-600">Ready to proceed with booking</p>
+                  <h3 className="font-semibold text-[#0E2A47] text-lg">Quote Accepted!</h3>
+                  <p className="text-sm text-gray-600">Ready to proceed with booking</p>
                 </div>
               </div>
               
               {/* Next Steps for Admin/Staff */}
               {isStaffOrAdmin && (
-                <div className="space-y-3">
-                  <h4 className="font-medium text-gray-800 text-sm">Next Steps:</h4>
-                  <div className="space-y-2">
-                    <Button
-                      onClick={() => setShowPaymentModal(true)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2"
-                    >
-                      💳 Request Payment ($2,850)
-                    </Button>
-                    <Button
-                      onClick={() => handleNextStep('documents')}
-                      className="w-full bg-amber-600 hover:bg-amber-700 text-white text-sm py-2"
-                    >
-                      📋 Request Documents
-                    </Button>
-                    <Button
-                      onClick={() => handleNextStep('crate')}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm py-2"
-                    >
-                      📦 Select IATA Crate
-                    </Button>
+                <div className="space-y-4">
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="font-medium text-[#0E2A47] text-sm mb-3">Next Steps:</h4>
+                    <div className="space-y-2">
+                      <Button
+                        onClick={() => setShowPaymentModal(true)}
+                        className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 flex items-center justify-center space-x-2"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        <span>Request Payment ($4,500)</span>
+                      </Button>
+                      <Button
+                        onClick={() => handleNextStep('documents')}
+                        className="w-full bg-[#8EB9D4] hover:bg-[#7ba8c7] text-[#0E2A47] text-sm py-2.5 flex items-center justify-center space-x-2"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Request Documents</span>
+                      </Button>
+                      <Button
+                        onClick={() => handleNextStep('crate')}
+                        className="w-full bg-[#F3C0CF] hover:bg-[#e8a8bc] text-[#0E2A47] text-sm py-2.5 flex items-center justify-center space-x-2"
+                      >
+                        <Package className="w-4 h-4" />
+                        <span>Select IATA Crate</span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
               
               {/* Status for Customer */}
               {!isStaffOrAdmin && (
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="text-sm text-green-700">
-                    Great! Our team will contact you shortly with next steps including payment, document requirements, and crate selection.
+                <div className="bg-[#F3C0CF]/20 border border-[#F3C0CF]/40 p-3 rounded-lg">
+                  <p className="text-sm text-[#0E2A47]">
+                    <strong>Great!</strong> Our team will contact you shortly with next steps including payment, document requirements, and crate selection.
                   </p>
                 </div>
               )}
@@ -454,31 +455,31 @@ export const ConversationPage: React.FC = () => {
       } else if (payload.type === 'quote_declined') {
         return (
           <div className="flex justify-center my-3 sm:my-4 px-4">
-            <div className="bg-red-100 text-red-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
-              <div className="w-2 h-2 bg-red-600 rounded-full flex-shrink-0"></div>
-              <span className="truncate font-medium">❌ Quote Declined - New quote may be needed</span>
+            <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <Plane className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate font-medium">Quote Declined - New quote may be needed</span>
             </div>
           </div>
         );
       } else if (payload.type === 'documents_requested') {
         return (
           <div className="flex justify-center my-4 sm:my-6 px-4">
-            <div className="bg-white border-2 border-amber-200 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-lg">
+            <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                  <FileText className="w-4 h-4 text-amber-600" />
+                <div className="w-8 h-8 rounded-full bg-[#F3C0CF] flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-[#0E2A47]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-amber-800 text-lg">Document Requirements</h3>
-                  <p className="text-sm text-amber-600">Please prepare the following documents</p>
+                  <h3 className="font-semibold text-[#0E2A47] text-lg">Document Requirements</h3>
+                  <p className="text-sm text-gray-600">Please prepare the following documents</p>
                 </div>
               </div>
               
               <div className="space-y-2">
                 {payload.requirements?.map((req: string, index: number) => (
                   <div key={index} className="flex items-start space-x-2">
-                    <div className="w-2 h-2 bg-amber-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <p className="text-sm text-gray-700">{req}</p>
+                    <div className="w-2 h-2 bg-[#8EB9D4] rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-sm text-[#0E2A47]">{req}</p>
                   </div>
                 ))}
               </div>
@@ -488,30 +489,30 @@ export const ConversationPage: React.FC = () => {
       } else if (payload.type === 'crate_selection') {
         return (
           <div className="flex justify-center my-4 sm:my-6 px-4">
-            <div className="bg-white border-2 border-purple-200 rounded-xl p-4 sm:p-6 max-w-md w-full shadow-lg">
+            <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                  <Package className="w-4 h-4 text-purple-600" />
+                <div className="w-8 h-8 rounded-full bg-[#F3C0CF] flex items-center justify-center">
+                  <Package className="w-4 h-4 text-[#0E2A47]" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-purple-800 text-lg">IATA Crate Selection</h3>
-                  <p className="text-sm text-purple-600">Recommended for {payload.petWeight}lb pet</p>
+                  <h3 className="font-semibold text-[#0E2A47] text-lg">IATA Crate Selection</h3>
+                  <p className="text-sm text-gray-600">Recommended for {payload.petWeight}lb pet</p>
                 </div>
               </div>
               
               <div className="space-y-3">
-                <p className="text-sm text-gray-600 mb-3">
+                <p className="text-sm text-[#0E2A47] mb-3">
                   <strong>Recommended:</strong> {payload.recommendedSize}
                 </p>
                 
                 {payload.options?.map((option: any, index: number) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-3">
+                  <div key={index} className="border border-[#8EB9D4] rounded-lg p-3">
                     <div className="flex justify-between items-center">
                       <div>
-                        <p className="font-medium text-gray-800">{option.size} Crate</p>
+                        <p className="font-medium text-[#0E2A47]">{option.size} Crate</p>
                         <p className="text-sm text-gray-600">{option.dimensions} inches</p>
                       </div>
-                      <p className="font-bold text-purple-600">{formatCurrency(option.price)}</p>
+                      <p className="font-bold text-[#0E2A47]">{formatCurrency(option.price)}</p>
                     </div>
                   </div>
                 ))}
