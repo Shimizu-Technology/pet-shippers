@@ -314,14 +314,53 @@ export const ConversationPage: React.FC = () => {
     if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_'))) {
       const payload = msg.payload as any;
       if (payload.type === 'payment_requested') {
-        return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
-            <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
-              <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-              <span className="truncate">Payment requested: {formatCurrency(payload.amountCents || payload.amount || 0)}</span>
+        const isCustomer = user?.role === 'client';
+        
+        if (isCustomer) {
+          // Enhanced payment request card for customers with navigation button
+          return (
+            <div className="flex justify-center my-4 sm:my-6 px-4">
+              <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-8 h-8 rounded-full bg-[#F3C0CF] flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 text-[#0E2A47]" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-[#0E2A47] text-lg">Payment Request</h3>
+                    <p className="text-sm text-gray-600">Payment required to proceed</p>
+                  </div>
+                </div>
+                
+                <div className="text-center mb-4">
+                  <p className="text-2xl sm:text-3xl font-bold text-[#0E2A47] mb-2">
+                    {formatCurrency(payload.amountCents || payload.amount || 0)}
+                  </p>
+                  <p className="text-sm text-gray-600">{payload.description || 'Payment for pet shipping services'}</p>
+                </div>
+                
+                <div className="border-t border-gray-200 pt-4">
+                  <Link 
+                    to="/billing"
+                    className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    <span>View & Pay Now</span>
+                  </Link>
+                </div>
+              </div>
             </div>
-          </div>
-        );
+          );
+        } else {
+          // Simple status message for admin/staff
+          return (
+            <div className="flex justify-center my-3 sm:my-4 px-4">
+              <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+                <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="truncate">Payment requested: {formatCurrency(payload.amountCents || payload.amount || 0)}</span>
+              </div>
+            </div>
+          );
+        }
       } else if (payload.type === 'payment_completed') {
         return (
           <div className="flex justify-center my-3 sm:my-4 px-4">
