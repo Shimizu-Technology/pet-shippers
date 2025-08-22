@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Package, Filter, Eye, User, Phone, Mail, Calendar, Plane, FileText, AlertTriangle, Clock, MapPin } from 'lucide-react';
-import { http } from '../lib/http';
-import { Shipment, ShipmentStatus, Document } from '../types';
+import { Shipment, ShipmentStatus } from '../types';
 import { formatDate, formatDateTime, formatRelativeTime, getStatusColor, getStatusLabel, getStatusDescription } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
+// Convex imports for real-time shipment data
+import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 const statusOptions: { value: ShipmentStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
@@ -30,29 +33,61 @@ export const ShipmentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | 'all'>('all');
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const focusShipmentId = searchParams.get('focus');
   const { user } = useAuth();
   const isStaffOrAdmin = ['admin', 'staff'].includes(user?.role || '');
 
-  const { data: shipments, isLoading } = useQuery({
-    queryKey: ['shipments', statusFilter],
-    queryFn: async () => {
-      const params = statusFilter !== 'all' ? `?status=${statusFilter}` : '';
-      const response = await http.get(`/shipments${params}`);
-      return response.data.shipments as Shipment[];
-    },
-  });
+  // 🚀 Use Convex for real-time shipment data
+  const convexShipments = useConvexQuery(
+    api.shipments.list,
+    user ? { userId: user.id, userRole: user.role } : "skip"
+  );
 
-  const { data: documents } = useQuery({
-    queryKey: ['documents'],
-    queryFn: async () => {
-      const response = await http.get('/documents');
-      return response.data.documents as Document[];
-    },
-  });
+  // Transform Convex data to match existing types and apply status filter
+  const shipments = convexShipments
+    ?.map((convexShip: any) => ({
+      id: convexShip._id,
+      conversationId: convexShip.conversationId,
+      petName: convexShip.petName,
+      petType: convexShip.petType,
+      petBreed: convexShip.petBreed,
+      petWeight: convexShip.petWeight,
+      ownerName: convexShip.ownerName,
+      ownerEmail: convexShip.ownerEmail,
+      ownerPhone: convexShip.ownerPhone,
+      route: convexShip.route,
+      status: convexShip.status,
+      estimatedDeparture: convexShip.estimatedDeparture,
+      estimatedArrival: convexShip.estimatedArrival,
+      actualDeparture: convexShip.actualDeparture,
+      actualArrival: convexShip.actualArrival,
+      flightNumber: convexShip.flightNumber,
+      crateSize: convexShip.crateSize,
+      specialInstructions: convexShip.specialInstructions,
+      createdAt: new Date(convexShip.createdAt).toISOString(),
+      updatedAt: new Date(convexShip.updatedAt).toISOString(),
+    }))
+    ?.filter(shipment => statusFilter === 'all' || shipment.status === statusFilter) || [];
+
+  const isLoading = convexShipments === undefined;
+
+  // 🚀 Use Convex for real-time document data
+  const convexDocuments = useConvexQuery(api.documents.list, {});
+  
+  // Transform Convex documents to match existing types
+  const documents = convexDocuments?.map((convexDoc: any) => ({
+    id: convexDoc._id,
+    name: convexDoc.name,
+    type: convexDoc.type,
+    url: convexDoc.url,
+    expiresOn: convexDoc.expiresOn,
+    shipmentId: convexDoc.shipmentId,
+    conversationId: convexDoc.conversationId,
+    uploadedBy: convexDoc.uploadedBy,
+    createdAt: new Date(convexDoc.createdAt).toISOString(),
+  })) || [];
 
   // Auto-open detail modal if focus parameter is provided
   useEffect(() => {
@@ -65,14 +100,19 @@ export const ShipmentsPage: React.FC = () => {
     }
   }, [focusShipmentId, shipments]);
 
+  // 🚀 Use Convex mutation for status updates
+  const convexUpdateStatus = useConvexMutation(api.shipments.updateStatus);
+
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: ShipmentStatus }) =>
-      http.patch(`/shipments/${id}`, { status }),
+      convexUpdateStatus({ 
+        id: id as Id<"shipments">, 
+        status
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shipments'] });
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // No need to invalidate queries - Convex updates automatically!
       setShowDetailModal(false);
+      console.log('Shipment status updated via Convex');
     },
   });
 

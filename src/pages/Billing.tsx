@@ -1,30 +1,41 @@
 import React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { CreditCard, DollarSign, CheckCircle, Clock } from 'lucide-react';
-import { http } from '../lib/http';
 import { PaymentRequest } from '../types';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
+// Convex imports for real-time payment data
+import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 export const BillingPage: React.FC = () => {
-  const queryClient = useQueryClient();
+  // 🚀 Use Convex for real-time payment data
+  const convexPaymentRequests = useConvexQuery(api.payments.list, {});
+  
+  // Transform Convex data to match existing types
+  const paymentRequests = convexPaymentRequests?.map((convexPayment: any) => ({
+    id: convexPayment._id,
+    conversationId: convexPayment.conversationId,
+    amountCents: convexPayment.amountCents,
+    status: convexPayment.status === 'pending' ? 'requested' : convexPayment.status, // Map 'pending' to 'requested' for UI compatibility
+    description: convexPayment.description,
+    createdAt: new Date(convexPayment.createdAt).toISOString(),
+    paidAt: convexPayment.paidAt ? new Date(convexPayment.paidAt).toISOString() : undefined,
+  })) || [];
 
-  const { data: paymentRequests, isLoading } = useQuery({
-    queryKey: ['payment-requests'],
-    queryFn: async () => {
-      const response = await http.get('/payment_requests');
-      return response.data.payment_requests as PaymentRequest[];
-    },
-  });
+  const isLoading = convexPaymentRequests === undefined;
+
+  // 🚀 Use Convex mutation for marking payments as paid
+  const convexMarkPaid = useConvexMutation(api.payments.markPaid);
 
   const markPaidMutation = useMutation({
     mutationFn: (paymentId: string) =>
-      http.post(`/payments/${paymentId}/mark_paid`),
+      convexMarkPaid({ id: paymentId as Id<"paymentRequests"> }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-requests'] });
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // No need to invalidate queries - Convex updates automatically!
+      console.log('Payment marked as paid via Convex');
     },
   });
 
