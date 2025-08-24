@@ -168,7 +168,7 @@ The `.env.local` file will be automatically created with the correct Convex URL.
 
 1. **Deploy to Convex Cloud:**
 ```bash
-npx convex deploy
+npx convex deploy --prod
 ```
 
 2. **Seed Production Data:**
@@ -180,6 +180,31 @@ npx convex run --prod seedData:seedAllData
 ```
 VITE_CONVEX_URL=https://your-deployment.convex.cloud
 ```
+
+### **Syncing Production with Latest Changes**
+
+When your production environment is out of sync with local development:
+
+1. **Deploy Latest Functions:**
+```bash
+npx convex deploy --prod
+```
+
+2. **Clear Old Data & Reseed:**
+```bash
+# Clear existing production data
+npx convex run --prod seedData:clearAllData
+
+# Seed fresh data with latest improvements
+npx convex run --prod seedData:seedAllData
+
+# Backfill missing shipments (if needed)
+npx convex run --prod seedData:backfillMissingShipments
+```
+
+3. **Verify Deployment:**
+- Check your production app to ensure data is properly populated
+- Test key workflows (quote requests, messaging, payments)
 
 ### **Frontend Deployment (Netlify)**
 
@@ -268,6 +293,20 @@ npm install
 - Verify Convex URL is correct
 - Check browser console for connection errors
 - Ensure both tabs use same Convex deployment
+
+**Production data out of sync with local:**
+```bash
+# Deploy latest code and reseed production
+npx convex deploy --prod
+npx convex run --prod seedData:clearAllData
+npx convex run --prod seedData:seedAllData
+```
+
+**Missing shipments in production:**
+```bash
+# Run backfill to create shipments for existing quote requests
+npx convex run --prod seedData:backfillMissingShipments
+```
 
 ## 📚 **Learning Resources**
 
