@@ -168,7 +168,7 @@ The `.env.local` file will be automatically created with the correct Convex URL.
 
 1. **Deploy to Convex Cloud:**
 ```bash
-npx convex deploy --prod
+npx convex deploy
 ```
 
 2. **Seed Production Data:**
@@ -187,7 +187,7 @@ When your production environment is out of sync with local development:
 
 1. **Deploy Latest Functions:**
 ```bash
-npx convex deploy --prod
+npx convex deploy
 ```
 
 2. **Clear Old Data & Reseed:**
@@ -297,7 +297,7 @@ npm install
 **Production data out of sync with local:**
 ```bash
 # Deploy latest code and reseed production
-npx convex deploy --prod
+npx convex deploy
 npx convex run --prod seedData:clearAllData
 npx convex run --prod seedData:seedAllData
 ```
