@@ -1,3 +1,68 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 🎯 Mobile Keyboard & Chat Optimizations */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific fixes */
+  .chat-container {
+    height: 100vh;
+    height: -webkit-fill-available;
+  }
+}
+
+/* Prevent zoom on input focus */
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+textarea {
+  font-size: 16px !important; /* Prevents zoom on iOS */
+  transform: translateZ(0); /* Hardware acceleration */
+}
+
+/* Virtual keyboard handling */
+@media screen and (max-width: 768px) {
+  /* When keyboard is likely open (viewport height is small) */
+  @media (max-height: 500px) {
+    .mobile-keyboard-open {
+      padding-bottom: 0 !important;
+    }
+    
+    .mobile-nav-when-keyboard {
+      transform: translateY(100%);
+      transition: transform 0.3s ease-in-out;
+    }
+  }
+}
+
+/* Smooth transitions for layout changes */
+.chat-layout {
+  transition: padding-bottom 0.3s ease-in-out;
+}
+
+/* Ensure proper touch targets */
+button, input, textarea {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Fix for iOS safe areas */
+.ios-safe-area {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent body scroll when in conversation view */
+body.conversation-active {
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Ensure html and body take full height */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}

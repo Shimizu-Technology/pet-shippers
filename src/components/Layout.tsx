@@ -11,6 +11,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const roleSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Close role switcher when clicking outside
@@ -23,6 +24,26 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 🎯 Keyboard detection for mobile navigation
+  useEffect(() => {
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        const initialHeight = window.innerHeight;
+        const currentHeight = window.visualViewport.height;
+        const heightDifference = initialHeight - currentHeight;
+        
+        // Hide mobile nav when keyboard is open
+        setIsKeyboardOpen(heightDifference > 150);
+      }
+    };
+
+    if (window.visualViewport) {
+      const viewport = window.visualViewport;
+      viewport.addEventListener('resize', handleViewportChange);
+      return () => viewport.removeEventListener('resize', handleViewportChange);
+    }
   }, []);
 
   // Role-based navigation
@@ -177,7 +198,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 transition-transform duration-300 ${
+        isKeyboardOpen ? 'transform translate-y-full' : 'transform translate-y-0'
+      }`}>
         <div className={`grid ${navigation.length === 4 ? 'grid-cols-4' : navigation.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} h-16`}>
           {navigation.map((item) => {
             const Icon = item.icon;

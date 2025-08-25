@@ -14,10 +14,13 @@ import {
   Download,
   ShoppingCart,
   Plus,
-  CheckCircle
+  CheckCircle,
+  LayoutDashboard,
+  Inbox,
+  CreditCard
 } from 'lucide-react';
 import { http } from '../lib/http';
-import { Message, QuoteTemplate, Shipment, Document, User } from '../types';
+import { Message, Document, User } from '../types';
 import { formatDate, formatCurrency, getStatusLabel, formatRelativeTime } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
@@ -37,7 +40,9 @@ export const ConversationPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [showMobileShipmentDetails, setShowMobileShipmentDetails] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -204,6 +209,75 @@ export const ConversationPage: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeMessages]);
+
+  // 🎯 Prevent body scroll when conversation is active
+  useEffect(() => {
+    document.body.classList.add('conversation-active');
+    return () => {
+      document.body.classList.remove('conversation-active');
+    };
+  }, []);
+
+  // 🎯 Mobile keyboard detection and handling
+  useEffect(() => {
+    let initialViewportHeight = window.visualViewport?.height || window.innerHeight;
+    
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        const currentHeight = window.visualViewport.height;
+        const heightDifference = initialViewportHeight - currentHeight;
+        
+        // Keyboard is likely open if viewport height decreased significantly
+        const keyboardOpen = heightDifference > 150;
+        setIsKeyboardOpen(keyboardOpen);
+        
+        // Update CSS custom property for dynamic height
+        document.documentElement.style.setProperty('--vh', `${currentHeight * 0.01}px`);
+      }
+    };
+
+    const handleResize = () => {
+      // Update initial height on orientation change
+      setTimeout(() => {
+        initialViewportHeight = window.visualViewport?.height || window.innerHeight;
+        handleViewportChange();
+      }, 100);
+    };
+
+    // Listen for viewport changes (keyboard show/hide)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+    }
+    
+    // Fallback for older browsers
+    window.addEventListener('resize', handleResize);
+    
+    // Initial setup
+    handleViewportChange();
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Handle input focus/blur for additional keyboard detection
+  const handleInputFocus = () => {
+    setIsKeyboardOpen(true);
+    // Scroll to bottom when keyboard opens
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+  };
+
+  const handleInputBlur = () => {
+    // Small delay to prevent flickering
+    setTimeout(() => {
+      setIsKeyboardOpen(false);
+    }, 100);
+  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -633,14 +707,14 @@ export const ConversationPage: React.FC = () => {
       );
       
       return (
-        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6`}>
+        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4 sm:mb-6 px-2`}>
           <div className="max-w-[320px] sm:max-w-sm lg:max-w-lg bg-white border-2 border-[#8EB9D4] rounded-xl p-4 sm:p-6 shadow-lg">
             <div className="flex items-start space-x-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-[#8EB9D4] flex items-center justify-center flex-shrink-0">
                 <Quote className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-[#0E2A47] text-base sm:text-lg">{payload.title}</h4>
+                <h4 className="font-semibold text-[#0E2A47] text-base sm:text-lg break-words">{payload.title}</h4>
                 <p className="text-2xl sm:text-3xl font-bold text-[#0E2A47] mt-1">
                   {formatCurrency(payload.priceCents)}
                 </p>
@@ -695,23 +769,23 @@ export const ConversationPage: React.FC = () => {
       const payload = msg.payload as any;
       const isCustomer = user?.role === 'client';
       return (
-        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4`}>
-          <div className="max-w-[280px] sm:max-w-xs lg:max-w-md bg-white border border-brand-coral rounded-lg p-3 sm:p-4 shadow-sm">
+        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4 px-2`}>
+          <div className="max-w-[280px] sm:max-w-xs lg:max-w-md bg-white border border-[#F3C0CF] rounded-lg p-3 sm:p-4 shadow-sm">
             <div className="flex items-start space-x-2 sm:space-x-3">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-brand-coral flex items-center justify-center flex-shrink-0">
-                <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-[#F3C0CF] flex items-center justify-center flex-shrink-0">
+                <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4 text-[#0E2A47]" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-brand-navy text-sm sm:text-base">{payload.productName}</h4>
+                <h4 className="font-medium text-[#0E2A47] text-sm sm:text-base break-words">{payload.productName}</h4>
                 <p className="text-xs text-gray-600">SKU: {payload.productSku}</p>
-                <p className="text-xl sm:text-2xl font-bold text-brand-navy mt-1">
+                <p className="text-xl sm:text-2xl font-bold text-[#0E2A47] mt-1">
                   {formatCurrency(payload.priceCents)}
                 </p>
                 {isCustomer && (
                   <Button
                     onClick={() => requestPaymentMutation.mutate(payload.priceCents / 100)}
                     disabled={requestPaymentMutation.isPending}
-                    className="mt-3 w-full bg-brand-coral hover:bg-red-500 text-white text-sm py-2"
+                    className="mt-3 w-full bg-[#F3C0CF] hover:bg-[#e8a8bc] text-[#0E2A47] text-sm py-2"
                   >
                     {requestPaymentMutation.isPending ? 'Processing...' : 'Add to Order'}
                   </Button>
@@ -725,13 +799,13 @@ export const ConversationPage: React.FC = () => {
     }
 
     return (
-      <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4`}>
-        <div className={`max-w-[280px] sm:max-w-xs lg:max-w-md px-3 sm:px-4 py-2 sm:py-3 rounded-2xl ${
+      <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4 px-2`}>
+        <div className={`max-w-[280px] sm:max-w-xs lg:max-w-md px-3 sm:px-4 py-2 sm:py-3 rounded-2xl break-words ${
           isCurrentUser 
             ? 'bg-[#0E2A47] text-white' 
-            : 'bg-gray-100 text-gray-900'
+            : 'bg-white text-gray-900 border border-gray-200'
         }`}>
-          <p className="text-sm sm:text-base leading-relaxed">{msg.text}</p>
+          <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.text}</p>
           <p className={`text-xs mt-1 ${isCurrentUser ? 'text-gray-300' : 'text-gray-500'}`}>
             {formatDate(msg.createdAt)}
           </p>
@@ -753,184 +827,150 @@ export const ConversationPage: React.FC = () => {
   }
 
   return (
-    <Layout>
-      <div className="flex h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-white">
+      {/* Header - Always visible */}
+      <div className="flex-shrink-0 border-b border-gray-200 p-3 sm:p-4 bg-white">
+        <div className="flex items-center space-x-3">
+          <Link 
+            to={user?.role === 'client' ? '/portal/inbox' : '/app/inbox'}
+            className="text-gray-400 hover:text-gray-600 transition-colors lg:hidden p-1 flex-shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
+                {conversation?.title}
+              </h1>
+              {/* 🚀 Convex Status */}
+              <div className="flex items-center space-x-2 text-xs flex-shrink-0">
+                <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">
+                  ⚡ Real-time
+                </span>
+              </div>
+            </div>
+            {conversation && (
+              <div className="mt-1">
+                {(() => {
+                  const { participants } = getParticipantDetails(conversation.participantIds);
+                  const clients = participants.filter(p => p.role === 'client');
+                  const staff = participants.filter(p => p.role === 'admin' || p.role === 'staff');
+                  const partners = participants.filter(p => p.role === 'partner');
+                  
+                  return (
+                    <div className="text-xs sm:text-sm text-gray-600 truncate">
+                      {clients.length > 0 && (
+                        <span className="mr-2">
+                          <span className="font-medium text-gray-900">
+                            {clients.map(c => c.name.split(' ')[0]).join(', ')}
+                          </span>
+                          <span className="text-gray-500"> (Customer{clients.length > 1 ? 's' : ''})</span>
+                        </span>
+                      )}
+                      {staff.length > 0 && (
+                        <span className="mr-2">
+                          <span className="font-medium text-[#0E2A47]">
+                            {staff.map(s => s.name.split(' ')[0]).join(', ')}
+                          </span>
+                          <span className="text-gray-500"> (Staff)</span>
+                        </span>
+                      )}
+                      {partners.length > 0 && (
+                        <span>
+                          <span className="font-medium text-green-700">
+                            {partners.map(p => p.name.split(' ')[0]).join(', ')}
+                          </span>
+                          <span className="text-gray-500"> (Partner{partners.length > 1 ? 's' : ''})</span>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+          {/* Mobile shipment info button */}
+          {shipment && (
+            <button
+              onClick={() => setShowMobileShipmentDetails(!showMobileShipmentDetails)}
+              className="lg:hidden p-2 text-gray-400 hover:text-[#0E2A47] transition-colors flex-shrink-0"
+              title="Shipment Details"
+            >
+              <Package className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Conversations List - Hidden on mobile */}
-        <div className="hidden lg:block">
+        <div className="hidden lg:block flex-shrink-0">
           <ConversationsList />
         </div>
         
-        {/* Messages Area */}
-        <div className="flex-1 flex flex-col lg:border-l border-gray-200">
-          {/* Header */}
-          <div className="border-b border-gray-200 p-3 sm:p-4 bg-white">
-            <div className="flex items-center space-x-3">
-              <Link 
-                to={user?.role === 'client' ? '/portal/inbox' : '/app/inbox'}
-                className="text-gray-400 hover:text-gray-600 transition-colors lg:hidden p-1"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
-                  {conversation?.title}
-                </h1>
-                  {/* 🚀 Convex Status */}
-                  <div className="flex items-center space-x-2 text-xs">
-                    <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">
-                      ⚡ Real-time
-                    </span>
-              </div>
-                </div>
-                {conversation && (
-                  <div className="mt-1">
-                    {(() => {
-                      const { participants } = getParticipantDetails(conversation.participantIds);
-                      const clients = participants.filter(p => p.role === 'client');
-                      const staff = participants.filter(p => p.role === 'admin' || p.role === 'staff');
-                      const partners = participants.filter(p => p.role === 'partner');
-                      
-                      return (
-                        <div className="text-xs sm:text-sm text-gray-600">
-                          {clients.length > 0 && (
-                            <span className="mr-2">
-                              <span className="font-medium text-gray-900">
-                                {clients.map(c => c.name.split(' ')[0]).join(', ')}
-                              </span>
-                              <span className="text-gray-500"> (Customer{clients.length > 1 ? 's' : ''})</span>
-                            </span>
-                          )}
-                          {staff.length > 0 && (
-                            <span className="mr-2">
-                              <span className="font-medium text-[#0E2A47]">
-                                {staff.map(s => s.name.split(' ')[0]).join(', ')}
-                              </span>
-                              <span className="text-gray-500"> (Staff)</span>
-                            </span>
-                          )}
-                          {partners.length > 0 && (
-                            <span>
-                              <span className="font-medium text-green-700">
-                                {partners.map(p => p.name.split(' ')[0]).join(', ')}
-                              </span>
-                              <span className="text-gray-500"> (Partner{partners.length > 1 ? 's' : ''})</span>
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
+        {/* 🎯 MAIN CHAT AREA - Full height with proper flex layout */}
+        <div className="flex-1 flex flex-col lg:border-l border-gray-200 min-w-0">
+          {/* 🎯 SCROLLABLE MESSAGES AREA - Only this area scrolls */}
+          <div className="flex-1 overflow-hidden">
+            <div className="h-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 bg-gray-50">
+              {/* Show warning when trying to use Convex with mock conversation */}
+              {useConvex && !isValidConvexId && (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0">⚠️</div>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-medium text-yellow-800">Convex Mode - No Data</h4>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        You're viewing a mock API conversation. To test Convex real-time messaging:
+                      </p>
+                      <ol className="text-sm text-yellow-700 mt-2 ml-4 list-decimal">
+                        <li>Go to Customer Dashboard</li>
+                        <li>Click "Seed All Data" to create Convex conversations</li>
+                        <li>Navigate to a Convex conversation from the inbox</li>
+                      </ol>
+                    </div>
                   </div>
-                )}
-              </div>
-              {/* Mobile shipment info button */}
-              {shipment && (
-                <button
-                  onClick={() => setShowMobileShipmentDetails(!showMobileShipmentDetails)}
-                  className="lg:hidden p-2 text-gray-400 hover:text-[#0E2A47] transition-colors"
-                  title="Shipment Details"
-                >
-                  <Package className="w-5 h-5" />
-                </button>
+                </div>
               )}
+              
+              {/* Messages container with proper spacing */}
+              <div className="space-y-3 sm:space-y-4 pb-4">
+                {activeMessages?.map((msg) => (
+                  <div key={msg.id}>
+                    {renderMessage(msg)}
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
             </div>
           </div>
 
-          {/* Mobile Shipment Details - TODO: Implement with Convex shipments */}
-          {/* {showMobileShipmentDetails && shipment && (
-            <div className="lg:hidden border-b border-gray-200 bg-white p-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-[#0E2A47]">Shipment Details</h3>
-                  <button
-                    onClick={() => setShowMobileShipmentDetails(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-600">Pet:</span>
-                    <span className="ml-2 font-medium">{shipment.petName}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Route:</span>
-                    <span className="ml-2 font-medium">{shipment.route.from} → {shipment.route.to}</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(shipment.status)}`}>
-                    {getStatusLabel(shipment.status)}
-                  </span>
-                  <Link 
-                    to={`${user?.role === 'client' ? '/portal' : '/app'}/shipments?focus=${shipment.id}`}
-                    className="text-sm text-[#0E2A47] hover:text-[#0E2A47]/80 transition-colors"
-                  >
-                    View Details
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )} */}
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50">
-            {/* Show warning when trying to use Convex with mock conversation */}
-            {useConvex && !isValidConvexId && (
-              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-start space-x-3">
-                  <div className="w-5 h-5 text-yellow-600 mt-0.5">⚠️</div>
-                  <div>
-                    <h4 className="text-sm font-medium text-yellow-800">Convex Mode - No Data</h4>
-                    <p className="text-sm text-yellow-700 mt-1">
-                      You're viewing a mock API conversation. To test Convex real-time messaging:
-                    </p>
-                    <ol className="text-sm text-yellow-700 mt-2 ml-4 list-decimal">
-                      <li>Go to Customer Dashboard</li>
-                      <li>Click "Seed All Data" to create Convex conversations</li>
-                      <li>Navigate to a Convex conversation from the inbox</li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-3 sm:space-y-4">
-              {activeMessages?.map((msg) => (
-                <div key={msg.id}>
-                  {renderMessage(msg)}
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Message Composer */}
-          <div className="border-t border-gray-200 p-3 sm:p-4 bg-white">
+          {/* 🎯 FIXED COMPOSER - Always visible at bottom */}
+          <div className="flex-shrink-0 border-t border-gray-200 p-3 sm:p-4 bg-white">
             <form onSubmit={handleSendMessage} className="flex items-end space-x-2 sm:space-x-3">
-              <div className="flex space-x-1 sm:space-x-2">
+              <div className="flex space-x-1 sm:space-x-2 flex-shrink-0">
                 {/* Only show quote and payment buttons for staff/admin */}
                 {isStaffOrAdmin && (
                   <>
-                <button
-                  type="button"
-                  onClick={() => setShowQuoteModal(true)}
+                    <button
+                      type="button"
+                      onClick={() => setShowQuoteModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
-                  title="Insert Quote"
-                >
+                      title="Insert Quote"
+                    >
                       <Quote className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-                <button
-                  type="button"
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setShowPaymentModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                       title="Request Payment"
-                >
+                    >
                       <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-                <button
-                  type="button"
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setShowProductModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                       title="Recommend Product"
@@ -948,15 +988,19 @@ export const ConversationPage: React.FC = () => {
                 </button>
               </div>
               <Input
+                ref={inputRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
                 placeholder="Type a message..."
-                className="flex-1 text-sm sm:text-base"
+                className="flex-1 text-sm sm:text-base min-w-0"
+                style={{ fontSize: '16px' }} // Prevent zoom on iOS
               />
               <Button 
                 type="submit" 
                 disabled={!message.trim() || sendMessageMutation.isPending}
-                className="px-3 py-2 touch-manipulation"
+                className="px-3 py-2 touch-manipulation flex-shrink-0"
               >
                 <Send className="w-4 h-4" />
               </Button>
@@ -964,76 +1008,84 @@ export const ConversationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar - Hidden on mobile */}
-        <div className="hidden lg:block w-80 border-l border-gray-200 bg-white">
-          <div className="p-4 space-y-6">
-            {/* Shipment Summary - TODO: Implement with Convex shipments */}
-            {/* {shipment && (
+        {/* 🎯 RIGHT SIDEBAR - Fixed, scrollable content */}
+        <div className="hidden lg:block w-80 border-l border-gray-200 bg-white flex-shrink-0">
+          <div className="h-full overflow-y-auto overflow-x-hidden">
+            <div className="p-4 space-y-6">
+              {/* Documents */}
               <div>
-                <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Shipment Details</h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Pet</span>
-                    <span className="font-medium">{shipment.petName}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Route</span>
-                    <span className="font-medium">
-                      {shipment.route.from} → {shipment.route.to}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Status</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(shipment.status)}`}>
-                      {getStatusLabel(shipment.status)}
-                    </span>
-                  </div>
-                  <Link 
-                    to={`${user?.role === 'client' ? '/portal' : '/app'}/shipments?focus=${shipment.id}`}
-                    className="block w-full text-center bg-[#8EB9D4] text-[#0E2A47] py-2 rounded-lg text-sm font-medium hover:bg-[#8EB9D4]/90 transition-colors"
-                  >
-                    <Package className="w-4 h-4 inline mr-2" />
-                    View in Shipments
-                  </Link>
-                </div>
-              </div>
-            )} */}
-
-            {/* Documents */}
-            <div>
-              <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
-              <div className="space-y-2">
-                {documents && documents.length > 0 ? (
-                  documents.map((doc) => (
-                    <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-start space-x-3">
-                        <FileText className="w-5 h-5 text-gray-400 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {doc.name}
-                          </p>
-                          <p className="text-xs text-gray-500 capitalize">
-                            {doc.type.replace('_', ' ')}
-                          </p>
-                          {doc.expiresOn && (
-                            <DocumentExpiryBadge expiresOn={doc.expiresOn} />
-                          )}
+                <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
+                <div className="space-y-2">
+                  {documents && documents.length > 0 ? (
+                    documents.map((doc) => (
+                      <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-start space-x-3">
+                          <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {doc.name}
+                            </p>
+                            <p className="text-xs text-gray-500 capitalize">
+                              {doc.type.replace('_', ' ')}
+                            </p>
+                            {doc.expiresOn && (
+                              <DocumentExpiryBadge expiresOn={doc.expiresOn} />
+                            )}
+                          </div>
+                          <button className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
+                            <Download className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button className="text-gray-400 hover:text-gray-600 transition-colors">
-                          <Download className="w-4 h-4" />
-                        </button>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    No documents uploaded yet
-                  </p>
-                )}
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No documents uploaded yet
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* 🎯 MOBILE BOTTOM NAVIGATION - Fixed at bottom */}
+      <div className={`md:hidden flex-shrink-0 transition-transform duration-300 z-50 ${
+        isKeyboardOpen ? 'transform translate-y-full' : 'transform translate-y-0'
+      }`}>
+        <nav className="bg-white border-t border-gray-200">
+          <div className="grid grid-cols-4 h-16">
+            <Link
+              to="/portal/dashboard"
+              className="flex flex-col items-center justify-center space-y-1 transition-colors text-gray-400 hover:text-[#0E2A47]"
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              <span className="text-xs font-medium">Dashboard</span>
+            </Link>
+            <Link
+              to="/portal/inbox"
+              className="flex flex-col items-center justify-center space-y-1 transition-colors text-[#0E2A47] bg-[#F3C0CF]/10"
+            >
+              <Inbox className="w-5 h-5" />
+              <span className="text-xs font-medium">Inbox</span>
+            </Link>
+            <Link
+              to="/portal/shipments"
+              className="flex flex-col items-center justify-center space-y-1 transition-colors text-gray-400 hover:text-[#0E2A47]"
+            >
+              <Package className="w-5 h-5" />
+              <span className="text-xs font-medium">Shipments</span>
+            </Link>
+            <Link
+              to="/portal/billing"
+              className="flex flex-col items-center justify-center space-y-1 transition-colors text-gray-400 hover:text-[#0E2A47]"
+            >
+              <CreditCard className="w-5 h-5" />
+              <span className="text-xs font-medium">Billing</span>
+            </Link>
+          </div>
+        </nav>
       </div>
 
       {/* Quote Modal */}
@@ -1063,7 +1115,7 @@ export const ConversationPage: React.FC = () => {
 
           {/* Redesigned quote template cards */}
         <div className="space-y-4">
-          {quoteTemplates?.map((template) => (
+          {quoteTemplates && quoteTemplates.map((template) => (
               <div key={template._id} className="group border-2 border-gray-100 rounded-xl p-6 hover:border-[#F3C0CF] hover:shadow-lg transition-all duration-200 bg-white">
                 {/* Header with title and price */}
                 <div className="flex items-start justify-between mb-4">
@@ -1148,7 +1200,7 @@ export const ConversationPage: React.FC = () => {
         </div>
 
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {products?.filter(p => p.active).map((product) => (
+          {products && products.filter(p => p.active).map((product) => (
             <div
               key={product._id}
               className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
@@ -1213,7 +1265,7 @@ export const ConversationPage: React.FC = () => {
           defaultAmount={paymentAmount}
         />
       </Modal>
-    </Layout>
+    </div>
   );
 };
 
@@ -1316,14 +1368,14 @@ const ConversationsList: React.FC = () => {
   const basePrefix = user?.role === 'client' ? '/portal' : '/app';
 
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+    <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="flex-shrink-0 p-4 border-b border-gray-200">
         <h2 className="text-lg font-semibold text-[#0E2A47]">Conversations</h2>
       </div>
       
       {/* Conversations List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {isLoading ? (
           <div className="p-4 text-center">
             <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-[#0E2A47]"></div>
