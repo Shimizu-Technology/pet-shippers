@@ -17,7 +17,11 @@ import {
   CheckCircle,
   LayoutDashboard,
   Inbox,
-  CreditCard
+  CreditCard,
+  Heart,
+  MapPin,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { http } from '../lib/http';
 import { Message, Document, User } from '../types';
@@ -39,7 +43,7 @@ export const ConversationPage: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [showMobileShipmentDetails, setShowMobileShipmentDetails] = useState(false);
+  const [showMobileDetails, setShowMobileDetails] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -217,6 +221,27 @@ export const ConversationPage: React.FC = () => {
       document.body.classList.remove('conversation-active');
     };
   }, []);
+
+  // 🎯 Prevent scroll when mobile details modal is open
+  useEffect(() => {
+    if (showMobileDetails) {
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      
+      // Prevent body scroll
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      
+      return () => {
+        // Restore scroll position and body scroll
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [showMobileDetails]);
 
   // 🎯 Mobile keyboard detection and handling
   useEffect(() => {
@@ -437,6 +462,13 @@ export const ConversationPage: React.FC = () => {
                     <span>View & Pay Now</span>
                   </Link>
                 </div>
+                
+                {/* Timestamp */}
+                <div className="mt-4 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 text-center">
+                    Requested {formatDate(msg.createdAt)}
+                  </p>
+                </div>
               </div>
             </div>
           );
@@ -444,20 +476,26 @@ export const ConversationPage: React.FC = () => {
         
         // Simple status message for admin/staff
         return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
+          <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
             <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
               <span className="truncate">Payment requested: {formatCurrency(payload.amountCents || payload.amount || 0)}</span>
             </div>
+            <p className="text-xs text-gray-500">
+              Requested {formatDate(msg.createdAt)}
+            </p>
           </div>
         );
       } else if (payload.type === 'payment_completed') {
         return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
+          <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
             <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
               <span className="truncate">Payment completed: {formatCurrency(payload.amountCents)}</span>
             </div>
+            <p className="text-xs text-gray-500">
+              Completed {formatDate(msg.createdAt)}
+            </p>
           </div>
         );
       } else if (payload.type === 'quote_requested') {
@@ -545,6 +583,13 @@ export const ConversationPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              
+              {/* Timestamp */}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">
+                  Submitted {formatDate(msg.createdAt)}
+                </p>
+              </div>
             </div>
           </div>
         );
@@ -614,16 +659,26 @@ export const ConversationPage: React.FC = () => {
                   </p>
                 </div>
               )}
+              
+              {/* Timestamp */}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">
+                  Accepted {formatDate(msg.createdAt)}
+                </p>
+              </div>
             </div>
           </div>
         );
       } else if (payload.type === 'quote_declined') {
         return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
+          <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
             <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <Plane className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
               <span className="truncate font-medium">Quote Declined - New quote may be needed</span>
             </div>
+            <p className="text-xs text-gray-500">
+              Declined {formatDate(msg.createdAt)}
+            </p>
           </div>
         );
       } else if (payload.type === 'documents_requested') {
@@ -647,6 +702,13 @@ export const ConversationPage: React.FC = () => {
                     <p className="text-sm text-[#0E2A47]">{req}</p>
                   </div>
                 ))}
+              </div>
+              
+              {/* Timestamp */}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">
+                  Requested {formatDate(msg.createdAt)}
+                </p>
               </div>
             </div>
           </div>
@@ -682,16 +744,26 @@ export const ConversationPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+              
+              {/* Timestamp */}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">
+                  Initiated {formatDate(msg.createdAt)}
+                </p>
+              </div>
             </div>
           </div>
         );
       } else {
         return (
-          <div className="flex justify-center my-3 sm:my-4 px-4">
+          <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
             <div className="bg-[#F3C0CF] text-[#0E2A47] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <Plane className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
               <span className="truncate">Status updated to: {getStatusLabel(payload.to || payload.type)}</span>
             </div>
+            <p className="text-xs text-gray-500">
+              {formatDate(msg.createdAt)}
+            </p>
           </div>
         );
       }
@@ -758,7 +830,7 @@ export const ConversationPage: React.FC = () => {
             )}
             
             <div className="mt-3 text-xs text-gray-500 text-right">
-              {formatDate(msg.createdAt)}
+              Quote sent {formatDate(msg.createdAt)}
             </div>
           </div>
         </div>
@@ -798,6 +870,14 @@ export const ConversationPage: React.FC = () => {
       );
     }
 
+    // Get sender name for attribution
+    const senderName = (() => {
+      if (isCurrentUser) return 'You';
+      if (isSystem) return 'System';
+      const sender = users?.find(u => u._id === msg.senderId);
+      return sender?.name || 'Unknown User';
+    })();
+
     return (
       <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4 px-2`}>
         <div className={`max-w-[280px] sm:max-w-xs lg:max-w-md px-3 sm:px-4 py-2 sm:py-3 rounded-2xl break-words ${
@@ -805,6 +885,9 @@ export const ConversationPage: React.FC = () => {
             ? 'bg-[#0E2A47] text-white' 
             : 'bg-white text-gray-900 border border-gray-200'
         }`}>
+          {!isCurrentUser && !isSystem && (
+            <p className="text-xs font-medium text-gray-600 mb-1">{senderName}</p>
+          )}
           <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap">{msg.text}</p>
           <p className={`text-xs mt-1 ${isCurrentUser ? 'text-gray-300' : 'text-gray-500'}`}>
             {formatDate(msg.createdAt)}
@@ -842,12 +925,7 @@ export const ConversationPage: React.FC = () => {
               <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
                 {conversation?.title}
               </h1>
-              {/* 🚀 Convex Status */}
-              <div className="flex items-center space-x-2 text-xs flex-shrink-0">
-                <span className="px-2 py-1 rounded bg-green-100 text-green-700 font-medium">
-                  ⚡ Real-time
-                </span>
-              </div>
+
             </div>
             {conversation && (
               <div className="mt-1">
@@ -889,16 +967,14 @@ export const ConversationPage: React.FC = () => {
               </div>
             )}
           </div>
-          {/* Mobile shipment info button */}
-          {shipment && (
-            <button
-              onClick={() => setShowMobileShipmentDetails(!showMobileShipmentDetails)}
-              className="lg:hidden p-2 text-gray-400 hover:text-[#0E2A47] transition-colors flex-shrink-0"
-              title="Shipment Details"
-            >
-              <Package className="w-5 h-5" />
-            </button>
-          )}
+          {/* Mobile details button */}
+          <button
+            onClick={() => setShowMobileDetails(true)}
+            className="lg:hidden p-2 text-gray-400 hover:text-[#0E2A47] transition-colors flex-shrink-0"
+            title="Conversation Details"
+          >
+            <Package className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -1008,10 +1084,141 @@ export const ConversationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 🎯 RIGHT SIDEBAR - Fixed, scrollable content */}
+        {/* 🎯 RIGHT SIDEBAR - Conversation Details */}
         <div className="hidden lg:block w-80 border-l border-gray-200 bg-white flex-shrink-0">
           <div className="h-full overflow-y-auto overflow-x-hidden">
             <div className="p-4 space-y-6">
+              
+              {/* Shipment Overview */}
+              {shipment && (
+                <div>
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-medium text-[#0E2A47]">Shipment Details</h3>
+                    </div>
+                    <Link
+                      to={`${user?.role === 'client' ? '/portal/shipments' : '/app/shipments'}?focus=${shipment._id}`}
+                      className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-[#0E2A47] hover:bg-[#1a3a5c] rounded-lg transition-colors w-full justify-center"
+                    >
+                      <Package className="w-4 h-4 mr-2" />
+                      View Shipment Details
+                    </Link>
+                  </div>
+                  
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                    {/* Pet Info */}
+                    <div>
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Heart className="w-4 h-4 text-pink-500" />
+                        <span className="text-sm font-medium text-gray-900">Pet Information</span>
+                      </div>
+                      <div className="ml-6 space-y-1">
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">{shipment.petName}</span>
+                          {shipment.petType && (
+                            <span className="text-gray-500"> • {shipment.petType}</span>
+                          )}
+                        </p>
+                        {shipment.petBreed && (
+                          <p className="text-xs text-gray-500">{shipment.petBreed}</p>
+                        )}
+                        {shipment.petWeight && (
+                          <p className="text-xs text-gray-500">{shipment.petWeight} lbs</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Route */}
+                    {shipment.route && (
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <MapPin className="w-4 h-4 text-blue-500" />
+                          <span className="text-sm font-medium text-gray-900">Route</span>
+                        </div>
+                        <div className="ml-6">
+                          <p className="text-sm text-gray-700">
+                            {shipment.route.from} → {shipment.route.to}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Estimated Departure */}
+                    {shipment.estimatedDeparture && (
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Calendar className="w-4 h-4 text-green-500" />
+                          <span className="text-sm font-medium text-gray-900">Estimated Departure</span>
+                        </div>
+                        <div className="ml-6">
+                          <p className="text-sm text-gray-700">
+                            {new Date(shipment.estimatedDeparture).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Status */}
+                    <div>
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Package className="w-4 h-4 text-purple-500" />
+                        <span className="text-sm font-medium text-gray-900">Status</span>
+                      </div>
+                      <div className="ml-6">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          shipment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                          shipment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Special Instructions */}
+                    {shipment.specialInstructions && (
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <AlertCircle className="w-4 h-4 text-orange-500" />
+                          <span className="text-sm font-medium text-gray-900">Special Instructions</span>
+                        </div>
+                        <div className="ml-6">
+                          <p className="text-sm text-gray-700">{shipment.specialInstructions}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversation Participants */}
+              {conversation && (
+                <div>
+                  <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Participants</h3>
+                  <div className="space-y-2">
+                    {(() => {
+                      const { participants } = getParticipantDetails(conversation.participantIds);
+                      return participants.map((participant) => (
+                        <div key={participant.id} className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
+                          <div className="w-8 h-8 bg-[#0E2A47] rounded-full flex items-center justify-center text-white text-sm font-medium">
+                            {participant.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {participant.name}
+                            </p>
+                            <p className="text-xs text-gray-500 capitalize">
+                              {participant.role === 'client' ? 'Customer' : participant.role}
+                            </p>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* Documents */}
               <div>
                 <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
@@ -1045,10 +1252,211 @@ export const ConversationPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
             </div>
           </div>
         </div>
       </div>
+
+      {/* 🎯 MOBILE DETAILS MODAL */}
+      {showMobileDetails && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden"
+          style={{ position: 'fixed' }}
+          onClick={(e) => {
+            // Close modal if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              setShowMobileDetails(false);
+            }
+          }}
+        >
+          <div 
+            className="absolute inset-x-0 bottom-0 bg-white rounded-t-xl max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-[#0E2A47]">Conversation Details</h2>
+              <button
+                onClick={() => setShowMobileDetails(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto max-h-[calc(80vh-4rem)]">
+              <div className="p-4 space-y-6">
+                
+                {/* Shipment Overview */}
+                {shipment && (
+                  <div>
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-medium text-[#0E2A47]">Shipment Details</h3>
+                      </div>
+                      <Link
+                        to={`${user?.role === 'client' ? '/portal/shipments' : '/app/shipments'}?focus=${shipment._id}`}
+                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-[#0E2A47] hover:bg-[#1a3a5c] rounded-lg transition-colors w-full justify-center"
+                        onClick={() => setShowMobileDetails(false)}
+                      >
+                        <Package className="w-4 h-4 mr-2" />
+                        View Shipment Details
+                      </Link>
+                    </div>
+                    
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      {/* Pet Info */}
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Heart className="w-4 h-4 text-pink-500" />
+                          <span className="text-sm font-medium text-gray-900">Pet Information</span>
+                        </div>
+                        <div className="ml-6 space-y-1">
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">{shipment.petName}</span>
+                            {shipment.petType && (
+                              <span className="text-gray-500"> • {shipment.petType}</span>
+                            )}
+                          </p>
+                          {shipment.petBreed && (
+                            <p className="text-xs text-gray-500">{shipment.petBreed}</p>
+                          )}
+                          {shipment.petWeight && (
+                            <p className="text-xs text-gray-500">{shipment.petWeight} lbs</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Route */}
+                      {shipment.route && (
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <MapPin className="w-4 h-4 text-blue-500" />
+                            <span className="text-sm font-medium text-gray-900">Route</span>
+                          </div>
+                          <div className="ml-6">
+                            <p className="text-sm text-gray-700">
+                              {shipment.route.from} → {shipment.route.to}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Estimated Departure */}
+                      {shipment.estimatedDeparture && (
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Calendar className="w-4 h-4 text-green-500" />
+                            <span className="text-sm font-medium text-gray-900">Estimated Departure</span>
+                          </div>
+                          <div className="ml-6">
+                            <p className="text-sm text-gray-700">
+                              {new Date(shipment.estimatedDeparture).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Status */}
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Package className="w-4 h-4 text-purple-500" />
+                          <span className="text-sm font-medium text-gray-900">Status</span>
+                        </div>
+                        <div className="ml-6">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            shipment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                            shipment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Special Instructions */}
+                      {shipment.specialInstructions && (
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <AlertCircle className="w-4 h-4 text-orange-500" />
+                            <span className="text-sm font-medium text-gray-900">Special Instructions</span>
+                          </div>
+                          <div className="ml-6">
+                            <p className="text-sm text-gray-700">{shipment.specialInstructions}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Conversation Participants */}
+                {conversation && (
+                  <div>
+                    <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Participants</h3>
+                    <div className="space-y-2">
+                      {(() => {
+                        const { participants } = getParticipantDetails(conversation.participantIds);
+                        return participants.map((participant) => (
+                          <div key={participant.id} className="flex items-center space-x-3 p-2 rounded-lg bg-gray-50">
+                            <div className="w-8 h-8 bg-[#0E2A47] rounded-full flex items-center justify-center text-white text-sm font-medium">
+                              {participant.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {participant.name}
+                              </p>
+                              <p className="text-xs text-gray-500 capitalize">
+                                {participant.role === 'client' ? 'Customer' : participant.role}
+                              </p>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents */}
+                <div>
+                  <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
+                  <div className="space-y-2">
+                    {documents && documents.length > 0 ? (
+                      documents.map((doc) => (
+                        <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-start space-x-3">
+                            <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {doc.name}
+                              </p>
+                              <p className="text-xs text-gray-500 capitalize">
+                                {doc.type.replace('_', ' ')}
+                              </p>
+                              {doc.expiresOn && (
+                                <DocumentExpiryBadge expiresOn={doc.expiresOn} />
+                              )}
+                            </div>
+                            <button className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
+                              <Download className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No documents uploaded yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🎯 MOBILE BOTTOM NAVIGATION - Fixed at bottom */}
       <div className={`md:hidden flex-shrink-0 transition-transform duration-300 z-50 ${

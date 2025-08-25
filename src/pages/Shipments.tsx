@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Package, Filter, Eye, User, Phone, Mail, Calendar, Plane, FileText, AlertTriangle, Clock, MapPin } from 'lucide-react';
@@ -33,6 +33,8 @@ export const ShipmentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | 'all'>('all');
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [focusProcessed, setFocusProcessed] = useState(false);
+  const [manuallyClosing, setManuallyClosing] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const focusShipmentId = searchParams.get('focus');
@@ -91,14 +93,39 @@ export const ShipmentsPage: React.FC = () => {
 
   // Auto-open detail modal if focus parameter is provided
   useEffect(() => {
-    if (focusShipmentId && shipments) {
+    if (focusShipmentId && shipments && !focusProcessed && !manuallyClosing) {
       const focusedShipment = shipments.find(s => s.id === focusShipmentId);
       if (focusedShipment) {
         setSelectedShipment(focusedShipment);
         setShowDetailModal(true);
+        setFocusProcessed(true);
       }
     }
-  }, [focusShipmentId, shipments]);
+  }, [focusShipmentId, shipments, focusProcessed, manuallyClosing]);
+
+  // Reset focus processed when focusShipmentId changes (but only for new focus, not clearing)
+  useEffect(() => {
+    if (focusShipmentId) {
+      // New focus parameter - reset states to allow opening
+      setFocusProcessed(false);
+      setManuallyClosing(false);
+    }
+  }, [focusShipmentId]);
+
+  // Handle modal close - clear URL parameter and reset state
+  const handleCloseModal = useCallback(() => {
+    setManuallyClosing(true);
+    setShowDetailModal(false);
+    setSelectedShipment(null);
+    setFocusProcessed(false);
+    
+    // Clear the focus parameter from URL
+    if (focusShipmentId) {
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('focus');
+      navigate({ search: newSearchParams.toString() }, { replace: true });
+    }
+  }, [focusShipmentId, searchParams, navigate]);
 
   // 🚀 Use Convex mutation for status updates
   const convexUpdateStatus = useConvexMutation(api.shipments.updateStatus);
@@ -111,7 +138,7 @@ export const ShipmentsPage: React.FC = () => {
       }),
     onSuccess: () => {
       // No need to invalidate queries - Convex updates automatically!
-      setShowDetailModal(false);
+      handleCloseModal();
       console.log('Shipment status updated via Convex');
     },
   });
@@ -328,7 +355,7 @@ export const ShipmentsPage: React.FC = () => {
         {/* Detail Modal */}
         <Modal
           isOpen={showDetailModal}
-          onClose={() => setShowDetailModal(false)}
+          onClose={handleCloseModal}
           title={`Shipment Details - ${selectedShipment?.petName || ''}`}
           size="lg"
         >
@@ -614,7 +641,7 @@ export const ShipmentsPage: React.FC = () => {
                         size="sm"
                         className="text-xs"
                         onClick={() => {
-                          setShowDetailModal(false);
+                          handleCloseModal();
                           navigate(`/app/inbox/${selectedShipment.conversationId}`);
                         }}
                       >
