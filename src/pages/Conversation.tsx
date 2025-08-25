@@ -26,7 +26,7 @@ import {
 import { http } from '../lib/http';
 import { Message, Document, User } from '../types';
 import { formatDate, formatCurrency, getStatusLabel, formatRelativeTime } from '../lib/utils';
-import { Layout } from '../components/Layout';
+// import { Layout } from '../components/Layout'; // Not needed since we use fixed layout
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
@@ -98,6 +98,8 @@ export const ConversationPage: React.FC = () => {
   const isActiveLoading = useConvex 
     ? convexMessages === undefined
     : false;
+
+  // Removed initial app load tracking - not needed with new approach
 
   // Use Convex quote templates
   const quoteTemplates = useConvex ? convexQuoteTemplates : [];
@@ -433,7 +435,7 @@ export const ConversationPage: React.FC = () => {
         
         // Enhanced payment request card for customers
         if (isCustomer) {
-          return (
+        return (
             <div className="flex justify-center my-4 sm:my-6 px-4">
               <div className="bg-white border-2 border-[#8EB9D4] rounded-lg p-4 sm:p-6 max-w-md w-full shadow-lg">
                 <div className="flex items-center space-x-3 mb-4">
@@ -458,7 +460,7 @@ export const ConversationPage: React.FC = () => {
                     to="/portal/billing"
                     className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                   >
-                    <DollarSign className="w-4 h-4" />
+              <DollarSign className="w-4 h-4" />
                     <span>View & Pay Now</span>
                   </Link>
                 </div>
@@ -897,34 +899,24 @@ export const ConversationPage: React.FC = () => {
     );
   };
 
-  // Show loading if the active data source is loading (removed duplicate declaration)
-  
-  if (isActiveLoading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#0E2A47]"></div>
-        </div>
-      </Layout>
-    );
-  }
+  // Never show full-page loading for conversation switching - always show the layout
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-white">
       {/* Header - Always visible */}
       <div className="flex-shrink-0 border-b border-gray-200 p-3 sm:p-4 bg-white">
-        <div className="flex items-center space-x-3">
-          <Link 
+            <div className="flex items-center space-x-3">
+              <Link 
             to={user?.role === 'client' ? '/portal/inbox' : '/app/inbox'}
             className="text-gray-400 hover:text-gray-600 transition-colors lg:hidden p-1 flex-shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
-                {conversation?.title}
-              </h1>
+                  {conversation?.title}
+                </h1>
 
             </div>
             {conversation && (
@@ -1005,20 +997,49 @@ export const ConversationPage: React.FC = () => {
                         <li>Click "Seed All Data" to create Convex conversations</li>
                         <li>Navigate to a Convex conversation from the inbox</li>
                       </ol>
-                    </div>
+              </div>
+            </div>
+          </div>
+              )}
+              
+                            {/* Loading indicator for conversation switching */}
+              {isActiveLoading && conversationId && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-[#0E2A47]"></div>
+                    <span>Loading conversation...</span>
                   </div>
                 </div>
               )}
               
-              {/* Messages container with proper spacing */}
-              <div className="space-y-3 sm:space-y-4 pb-4">
-                {activeMessages?.map((msg) => (
-                  <div key={msg.id}>
-                    {renderMessage(msg)}
+              {/* Show messages when not loading or when we have messages */}
+              {(!isActiveLoading || (activeMessages && activeMessages.length > 0)) && (
+                <div className={`space-y-3 sm:space-y-4 pb-4 transition-opacity duration-200 ${
+                  isActiveLoading ? 'opacity-50' : 'opacity-100'
+                }`}>
+                  {activeMessages?.map((msg) => (
+                <div key={msg.id}>
+                  {renderMessage(msg)}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+                </div>
+              )}
+              
+              {/* Show empty state when no messages and not loading */}
+              {!isActiveLoading && (!activeMessages || activeMessages.length === 0) && conversationId && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <div className="text-gray-400 mb-2">
+                      <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-500">No messages yet</p>
+                    <p className="text-xs text-gray-400 mt-1">Start the conversation below</p>
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1029,24 +1050,24 @@ export const ConversationPage: React.FC = () => {
                 {/* Only show quote and payment buttons for staff/admin */}
                 {isStaffOrAdmin && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setShowQuoteModal(true)}
+                <button
+                  type="button"
+                  onClick={() => setShowQuoteModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
-                      title="Insert Quote"
-                    >
+                  title="Insert Quote"
+                >
                       <Quote className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                      type="button"
+                </button>
+                <button
+                  type="button"
                       onClick={() => setShowPaymentModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                       title="Request Payment"
-                    >
+                >
                       <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                      type="button"
+                </button>
+                <button
+                  type="button"
                       onClick={() => setShowProductModal(true)}
                       className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                       title="Recommend Product"
@@ -1087,11 +1108,11 @@ export const ConversationPage: React.FC = () => {
         {/* 🎯 RIGHT SIDEBAR - Conversation Details */}
         <div className="hidden lg:block w-80 border-l border-gray-200 bg-white flex-shrink-0">
           <div className="h-full overflow-y-auto overflow-x-hidden">
-            <div className="p-4 space-y-6">
+          <div className="p-4 space-y-6">
               
               {/* Shipment Overview */}
-              {shipment && (
-                <div>
+            {shipment && (
+              <div>
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-lg font-medium text-[#0E2A47]">Shipment Details</h3>
@@ -1105,7 +1126,7 @@ export const ConversationPage: React.FC = () => {
                     </Link>
                   </div>
                   
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                     {/* Pet Info */}
                     <div>
                       <div className="flex items-center space-x-2 mb-2">
@@ -1114,7 +1135,7 @@ export const ConversationPage: React.FC = () => {
                       </div>
                       <div className="ml-6 space-y-1">
                         <p className="text-sm text-gray-700">
-                          <span className="font-medium">{shipment.petName}</span>
+                    <span className="font-medium">{shipment.petName}</span>
                           {shipment.petType && (
                             <span className="text-gray-500"> • {shipment.petType}</span>
                           )}
@@ -1125,7 +1146,7 @@ export const ConversationPage: React.FC = () => {
                         {shipment.petWeight && (
                           <p className="text-xs text-gray-500">{shipment.petWeight} lbs</p>
                         )}
-                      </div>
+                  </div>
                     </div>
 
                     {/* Route */}
@@ -1137,9 +1158,9 @@ export const ConversationPage: React.FC = () => {
                         </div>
                         <div className="ml-6">
                           <p className="text-sm text-gray-700">
-                            {shipment.route.from} → {shipment.route.to}
+                      {shipment.route.from} → {shipment.route.to}
                           </p>
-                        </div>
+                  </div>
                       </div>
                     )}
 
@@ -1172,8 +1193,8 @@ export const ConversationPage: React.FC = () => {
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
-                        </span>
-                      </div>
+                    </span>
+                  </div>
                     </div>
 
                     {/* Special Instructions */}
@@ -1293,16 +1314,16 @@ export const ConversationPage: React.FC = () => {
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-lg font-medium text-[#0E2A47]">Shipment Details</h3>
-                      </div>
-                      <Link
+                  </div>
+                  <Link 
                         to={`${user?.role === 'client' ? '/portal/shipments' : '/app/shipments'}?focus=${shipment._id}`}
                         className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-[#0E2A47] hover:bg-[#1a3a5c] rounded-lg transition-colors w-full justify-center"
                         onClick={() => setShowMobileDetails(false)}
-                      >
+                  >
                         <Package className="w-4 h-4 mr-2" />
                         View Shipment Details
-                      </Link>
-                    </div>
+                  </Link>
+                </div>
                     
                     <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                       {/* Pet Info */}
@@ -1310,7 +1331,7 @@ export const ConversationPage: React.FC = () => {
                         <div className="flex items-center space-x-2 mb-2">
                           <Heart className="w-4 h-4 text-pink-500" />
                           <span className="text-sm font-medium text-gray-900">Pet Information</span>
-                        </div>
+              </div>
                         <div className="ml-6 space-y-1">
                           <p className="text-sm text-gray-700">
                             <span className="font-medium">{shipment.petName}</span>
@@ -1416,44 +1437,44 @@ export const ConversationPage: React.FC = () => {
                       })()}
                     </div>
                   </div>
-                )}
+            )}
 
-                {/* Documents */}
-                <div>
-                  <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
-                  <div className="space-y-2">
-                    {documents && documents.length > 0 ? (
-                      documents.map((doc) => (
-                        <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex items-start space-x-3">
+            {/* Documents */}
+            <div>
+              <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
+              <div className="space-y-2">
+                {documents && documents.length > 0 ? (
+                  documents.map((doc) => (
+                    <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
                             <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {doc.name}
-                              </p>
-                              <p className="text-xs text-gray-500 capitalize">
-                                {doc.type.replace('_', ' ')}
-                              </p>
-                              {doc.expiresOn && (
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {doc.name}
+                          </p>
+                          <p className="text-xs text-gray-500 capitalize">
+                            {doc.type.replace('_', ' ')}
+                          </p>
+                          {doc.expiresOn && (
                                 <DocumentExpiryBadge expiresOn={doc.expiresOn} />
-                              )}
-                            </div>
-                            <button className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
-                              <Download className="w-4 h-4" />
-                            </button>
-                          </div>
+                          )}
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center py-4">
-                        No documents uploaded yet
-                      </p>
-                    )}
-                  </div>
-                </div>
-
+                            <button className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No documents uploaded yet
+                  </p>
+                )}
               </div>
             </div>
+
+          </div>
+        </div>
           </div>
         </div>
       )}
