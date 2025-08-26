@@ -15,18 +15,18 @@ import {
   ShoppingCart,
   Plus,
   CheckCircle,
-  LayoutDashboard,
-  Inbox,
-  CreditCard,
   Heart,
   MapPin,
   AlertCircle,
-  XCircle
+  XCircle,
+  Edit3
 } from 'lucide-react';
 import { http } from '../lib/http';
-import { Message, Document, User } from '../types';
+import { Message, Document, User, ShipmentStatus } from '../types';
 import { formatDate, formatCurrency, getStatusLabel, formatRelativeTime } from '../lib/utils';
-// import { Layout } from '../components/Layout'; // Not needed since we use fixed layout
+import { StatusChangeModal } from '../components/StatusChangeModal';
+import { QuickStatusChanger } from '../components/QuickStatusChanger';
+import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
@@ -44,7 +44,20 @@ export const ConversationPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [showMobileDetails, setShowMobileDetails] = useState(false);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [sendingProductId, setSendingProductId] = useState<string | null>(null);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  
+  // Rename conversation state
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  
+  // Status change modal state
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    currentStatus: ShipmentStatus;
+    newStatus: ShipmentStatus;
+  } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -156,19 +169,45 @@ export const ConversationPage: React.FC = () => {
     },
   });
 
+  // 🚀 Use Convex mutation for product recommendations
+  const convexSendProduct = useConvexMutation(api.messages.sendProduct);
+
   const sendProductMutation = useMutation({
-    mutationFn: (productId: string) =>
-      http.post(`/conversations/${conversationId}/products`, { productId }),
+    mutationFn: async (productId: string) => {
+      // Set which product is being sent
+      setSendingProductId(productId);
+      
+      // Find the product details
+      const product = products?.find(p => p._id === productId);
+      if (!product) throw new Error('Product not found');
+
+      return await convexSendProduct({
+        conversationId: conversationId as Id<"conversations">,
+        senderId: user?.id || 'system',
+        payload: {
+          productId: product._id,
+          productName: product.name,
+          productSku: product.sku,
+          priceCents: product.priceCents,
+        },
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // No need to invalidate queries - Convex updates automatically!
+      setSendingProductId(null);
       setShowProductModal(false);
+    },
+    onError: () => {
+      // Clear the sending state on error too
+      setSendingProductId(null);
     },
   });
 
   // 🚀 Use Convex mutations for payment requests and status messages
   const convexCreatePaymentRequest = useConvexMutation(api.payments.createRequest);
   const convexSendStatus = useConvexMutation(api.messages.sendStatus);
+  const convexUpdateShipmentStatus = useConvexMutation(api.shipments.updateStatus);
+  const convexUpdateConversation = useConvexMutation(api.conversations.update);
 
   const requestPaymentMutation = useMutation({
     mutationFn: async (amount: number) => {
@@ -212,6 +251,42 @@ export const ConversationPage: React.FC = () => {
     },
   });
 
+  // Status change handlers
+  const handleStatusChangeRequest = (newStatus: ShipmentStatus) => {
+    if (!shipment) return;
+    
+    setPendingStatusChange({
+      currentStatus: shipment.status as ShipmentStatus,
+      newStatus,
+    });
+    setShowStatusModal(true);
+  };
+
+  const statusChangeMutation = useMutation({
+    mutationFn: async ({ shipmentId, newStatus }: { shipmentId: string; newStatus: ShipmentStatus }) => {
+      await convexUpdateShipmentStatus({
+        id: shipmentId as Id<"shipments">,
+        status: newStatus,
+      });
+    },
+    onSuccess: () => {
+      setShowStatusModal(false);
+      setPendingStatusChange(null);
+    },
+    onError: (error) => {
+      console.error('Error updating shipment status:', error);
+    },
+  });
+
+  const handleConfirmStatusChange = () => {
+    if (!pendingStatusChange || !shipment) return;
+    
+    statusChangeMutation.mutate({
+      shipmentId: shipment._id,
+      newStatus: pendingStatusChange.newStatus,
+    });
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeMessages]);
@@ -245,65 +320,53 @@ export const ConversationPage: React.FC = () => {
     }
   }, [showMobileDetails]);
 
-  // 🎯 Mobile keyboard detection and handling
-  useEffect(() => {
-    let initialViewportHeight = window.visualViewport?.height || window.innerHeight;
-    
-    const handleViewportChange = () => {
-      if (window.visualViewport) {
-        const currentHeight = window.visualViewport.height;
-        const heightDifference = initialViewportHeight - currentHeight;
-        
-        // Keyboard is likely open if viewport height decreased significantly
-        const keyboardOpen = heightDifference > 150;
-        setIsKeyboardOpen(keyboardOpen);
-        
-        // Update CSS custom property for dynamic height
-        document.documentElement.style.setProperty('--vh', `${currentHeight * 0.01}px`);
-      }
-    };
-
-    const handleResize = () => {
-      // Update initial height on orientation change
-      setTimeout(() => {
-        initialViewportHeight = window.visualViewport?.height || window.innerHeight;
-        handleViewportChange();
-      }, 100);
-    };
-
-    // Listen for viewport changes (keyboard show/hide)
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange);
-    }
-    
-    // Fallback for older browsers
-    window.addEventListener('resize', handleResize);
-    
-    // Initial setup
-    handleViewportChange();
-
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleViewportChange);
-      }
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  // Handle input focus/blur for additional keyboard detection
+  // Handle input focus for scrolling
   const handleInputFocus = () => {
-    setIsKeyboardOpen(true);
-    // Scroll to bottom when keyboard opens
+    // Scroll to bottom when input is focused
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 300);
   };
 
-  const handleInputBlur = () => {
-    // Small delay to prevent flickering
-    setTimeout(() => {
-      setIsKeyboardOpen(false);
-    }, 100);
+  // 🚀 Rename conversation functionality
+  const startRename = () => {
+    if (!conversation?.title) return;
+    setRenameValue(conversation.title);
+    setIsRenaming(true);
+  };
+
+  const cancelRename = () => {
+    setIsRenaming(false);
+    setRenameValue('');
+  };
+
+  const saveRename = async () => {
+    if (!conversationId || !renameValue.trim() || renameValue.trim() === conversation?.title) {
+      cancelRename();
+      return;
+    }
+
+    try {
+      await convexUpdateConversation({
+        id: conversationId as Id<"conversations">,
+        title: renameValue.trim(),
+      });
+      setIsRenaming(false);
+      setRenameValue('');
+    } catch (error) {
+      console.error('Failed to rename conversation:', error);
+      // Keep rename mode active so user can try again
+    }
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelRename();
+    }
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -403,6 +466,8 @@ export const ConversationPage: React.FC = () => {
 
   // Define isStaffOrAdmin at component level
   const isStaffOrAdmin = ['admin', 'staff'].includes(user?.role || '');
+
+
 
   const getParticipantDetails = (participantIds: string[]) => {
     if (!users) return { participants: [] };
@@ -902,9 +967,10 @@ export const ConversationPage: React.FC = () => {
   // Never show full-page loading for conversation switching - always show the layout
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-white">
-      {/* Header - Always visible */}
-      <div className="flex-shrink-0 border-b border-gray-200 p-3 sm:p-4 bg-white">
+    <Layout>
+      <div className="flex flex-col h-full min-h-0">
+        {/* Conversation Header - Always visible */}
+        <div className="flex-shrink-0 border-b border-gray-200 p-3 sm:p-4 bg-white">
             <div className="flex items-center space-x-3">
               <Link 
             to={user?.role === 'client' ? '/portal/inbox' : '/app/inbox'}
@@ -915,9 +981,8 @@ export const ConversationPage: React.FC = () => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h1 className="text-base sm:text-lg font-semibold text-[#0E2A47] truncate">
-                  {conversation?.title}
-                </h1>
-
+                {conversation?.title}
+              </h1>
             </div>
             {conversation && (
               <div className="mt-1">
@@ -966,6 +1031,19 @@ export const ConversationPage: React.FC = () => {
             title="Conversation Details"
           >
             <Package className="w-5 h-5" />
+          </button>
+          
+          {/* Desktop sidebar collapse button */}
+          <button
+            onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+            className="hidden lg:block p-2 text-gray-400 hover:text-[#0E2A47] transition-colors flex-shrink-0"
+            title={isRightSidebarCollapsed ? "Show Shipment Details" : "Hide Shipment Details"}
+          >
+            {isRightSidebarCollapsed ? (
+              <Package className="w-5 h-5" />
+            ) : (
+              <XCircle className="w-5 h-5" />
+            )}
           </button>
         </div>
       </div>
@@ -1089,7 +1167,6 @@ export const ConversationPage: React.FC = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onFocus={handleInputFocus}
-                onBlur={handleInputBlur}
                 placeholder="Type a message..."
                 className="flex-1 text-sm sm:text-base min-w-0"
                 style={{ fontSize: '16px' }} // Prevent zoom on iOS
@@ -1106,10 +1183,68 @@ export const ConversationPage: React.FC = () => {
         </div>
 
         {/* 🎯 RIGHT SIDEBAR - Conversation Details */}
-        <div className="hidden lg:block w-80 border-l border-gray-200 bg-white flex-shrink-0">
+        {!isRightSidebarCollapsed && (
+          <div className="hidden lg:block w-80 border-l border-gray-200 bg-white flex-shrink-0">
           <div className="h-full overflow-y-auto overflow-x-hidden">
           <div className="p-4 space-y-6">
               
+              {/* Conversation Details */}
+              <div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Conversation Details</h3>
+                  
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                    {/* Conversation Title */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900">Title</span>
+                        {isStaffOrAdmin && (
+                          <button
+                            onClick={startRename}
+                            className="p-1 text-gray-400 hover:text-[#0E2A47] transition-colors"
+                            title="Edit conversation title"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      {isRenaming ? (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={handleRenameKeyDown}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0E2A47] focus:border-transparent"
+                            autoFocus
+                            style={{ fontSize: '16px' }} // Prevent zoom on iOS
+                          />
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={saveRename}
+                              className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[#0E2A47] hover:bg-[#1a3a5c] rounded-md transition-colors"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelRename}
+                              className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-700 font-medium">
+                          {conversation?.title}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Shipment Overview */}
             {shipment && (
               <div>
@@ -1182,19 +1317,29 @@ export const ConversationPage: React.FC = () => {
                     {/* Status */}
                     <div>
                       <div className="flex items-center space-x-2 mb-2">
-                        <Package className="w-4 h-4 text-purple-500" />
                         <span className="text-sm font-medium text-gray-900">Status</span>
+                        {isStaffOrAdmin && (
+                          <span className="text-xs text-gray-500">(Click to change)</span>
+                        )}
                       </div>
-                      <div className="ml-6">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          shipment.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
-                          shipment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
+                      <div className="ml-0">
+                        {isStaffOrAdmin ? (
+                          <QuickStatusChanger
+                            currentStatus={shipment.status as ShipmentStatus}
+                            onStatusChange={handleStatusChangeRequest}
+                            disabled={statusChangeMutation.isPending}
+                          />
+                        ) : (
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            shipment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                            shipment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
                     </span>
-                  </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Special Instructions */}
@@ -1276,7 +1421,8 @@ export const ConversationPage: React.FC = () => {
 
             </div>
           </div>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 🎯 MOBILE DETAILS MODAL */}
@@ -1308,6 +1454,63 @@ export const ConversationPage: React.FC = () => {
             <div className="overflow-y-auto max-h-[calc(80vh-4rem)]">
               <div className="p-4 space-y-6">
                 
+                {/* Conversation Details */}
+                <div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Conversation Details</h3>
+                    
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      {/* Conversation Title */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">Title</span>
+                          {isStaffOrAdmin && (
+                            <button
+                              onClick={startRename}
+                              className="p-1 text-gray-400 hover:text-[#0E2A47] transition-colors"
+                              title="Edit conversation title"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        
+                        {isRenaming ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onKeyDown={handleRenameKeyDown}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0E2A47] focus:border-transparent"
+                              autoFocus
+                              style={{ fontSize: '16px' }} // Prevent zoom on iOS
+                            />
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={saveRename}
+                                className="flex-1 px-3 py-2 text-sm font-medium text-white bg-[#0E2A47] hover:bg-[#1a3a5c] rounded-md transition-colors"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelRename}
+                                className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-700 font-medium">
+                            {conversation?.title}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Shipment Overview */}
                 {shipment && (
                   <div>
@@ -1383,16 +1586,27 @@ export const ConversationPage: React.FC = () => {
                         <div className="flex items-center space-x-2 mb-2">
                           <Package className="w-4 h-4 text-purple-500" />
                           <span className="text-sm font-medium text-gray-900">Status</span>
+                          {isStaffOrAdmin && (
+                            <span className="text-xs text-gray-500">(Tap to change)</span>
+                          )}
                         </div>
                         <div className="ml-6">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            shipment.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
-                            shipment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
-                          </span>
+                          {isStaffOrAdmin ? (
+                            <QuickStatusChanger
+                              currentStatus={shipment.status as ShipmentStatus}
+                              onStatusChange={handleStatusChangeRequest}
+                              disabled={statusChangeMutation.isPending}
+                            />
+                          ) : (
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              shipment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              shipment.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                              shipment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {shipment.status?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Pending'}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1475,47 +1689,11 @@ export const ConversationPage: React.FC = () => {
 
           </div>
         </div>
-          </div>
+      </div>
         </div>
       )}
 
-      {/* 🎯 MOBILE BOTTOM NAVIGATION - Fixed at bottom */}
-      <div className={`md:hidden flex-shrink-0 transition-transform duration-300 z-50 ${
-        isKeyboardOpen ? 'transform translate-y-full' : 'transform translate-y-0'
-      }`}>
-        <nav className="bg-white border-t border-gray-200">
-          <div className="grid grid-cols-4 h-16">
-            <Link
-              to="/portal/dashboard"
-              className="flex flex-col items-center justify-center space-y-1 transition-colors text-gray-400 hover:text-[#0E2A47]"
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              <span className="text-xs font-medium">Dashboard</span>
-            </Link>
-            <Link
-              to="/portal/inbox"
-              className="flex flex-col items-center justify-center space-y-1 transition-colors text-[#0E2A47] bg-[#F3C0CF]/10"
-            >
-              <Inbox className="w-5 h-5" />
-              <span className="text-xs font-medium">Inbox</span>
-            </Link>
-            <Link
-              to="/portal/shipments"
-              className="flex flex-col items-center justify-center space-y-1 transition-colors text-gray-400 hover:text-[#0E2A47]"
-            >
-              <Package className="w-5 h-5" />
-              <span className="text-xs font-medium">Shipments</span>
-            </Link>
-            <Link
-              to="/portal/billing"
-              className="flex flex-col items-center justify-center space-y-1 transition-colors text-gray-400 hover:text-[#0E2A47]"
-            >
-              <CreditCard className="w-5 h-5" />
-              <span className="text-xs font-medium">Billing</span>
-            </Link>
-          </div>
-        </nav>
-      </div>
+
 
       {/* Quote Modal */}
       <Modal
@@ -1644,10 +1822,10 @@ export const ConversationPage: React.FC = () => {
                 </div>
                 <Button
                   onClick={() => sendProductMutation.mutate(product._id)}
-                  disabled={sendProductMutation.isPending}
+                  disabled={sendingProductId === product._id}
                   className="ml-4"
                 >
-                  {sendProductMutation.isPending ? (
+                  {sendingProductId === product._id ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                       Sending...
@@ -1694,7 +1872,24 @@ export const ConversationPage: React.FC = () => {
           defaultAmount={paymentAmount}
         />
       </Modal>
-    </div>
+
+      {/* Status Change Confirmation Modal */}
+      {showStatusModal && pendingStatusChange && shipment && (
+        <StatusChangeModal
+          isOpen={showStatusModal}
+          onClose={() => {
+            setShowStatusModal(false);
+            setPendingStatusChange(null);
+          }}
+          onConfirm={handleConfirmStatusChange}
+          currentStatus={pendingStatusChange.currentStatus}
+          newStatus={pendingStatusChange.newStatus}
+          petName={shipment.petName}
+          isLoading={statusChangeMutation.isPending}
+        />
+      )}
+      </div>
+    </Layout>
   );
 };
 
@@ -1874,6 +2069,7 @@ const ConversationsList: React.FC = () => {
           </div>
         )}
       </div>
+
     </div>
   );
 };

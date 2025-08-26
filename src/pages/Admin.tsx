@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit, Trash2, Package, FileText } from 'lucide-react';
 import { http } from '../lib/http';
 import { QuoteTemplate, Product } from '../types';
@@ -8,9 +8,10 @@ import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
-// Convex imports for backfill function
-import { useMutation as useConvexMutation } from "convex/react";
+// Convex imports
+import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 export const AdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'templates' | 'products'>('templates');
@@ -18,93 +19,121 @@ export const AdminPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuoteTemplate | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [backfillResult, setBackfillResult] = useState<string>('');
   const queryClient = useQueryClient();
 
-  // 🚀 Convex backfill function
-  const backfillShipments = useConvexMutation(api.seedData.backfillMissingShipments);
+  // 🚀 Use Convex queries instead of TanStack Query
+  const convexQuoteTemplates = useConvexQuery(api.quoteTemplates.list);
+  const convexProducts = useConvexQuery(api.products.listActive);
 
-  const handleBackfillShipments = async () => {
-    try {
-      const result = await backfillShipments({});
-      setBackfillResult(result);
-      // Refresh the page after a short delay to see the new shipments
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error) {
-      console.error('Backfill failed:', error);
-      setBackfillResult('Backfill failed: ' + (error as Error).message);
-    }
-  };
+  // Transform Convex data to match existing types
+  const quoteTemplates = convexQuoteTemplates?.map((template: any) => ({
+    id: template._id,
+    title: template.title,
+    body: template.body,
+    defaultPriceCents: template.defaultPriceCents,
+    active: template.active,
+  })) || [];
 
-  const { data: quoteTemplates, isLoading: templatesLoading } = useQuery({
-    queryKey: ['quote-templates'],
-    queryFn: async () => {
-      const response = await http.get('/quote_templates');
-      return response.data.quote_templates as QuoteTemplate[];
-    },
-  });
+  const products = convexProducts?.map((product: any) => ({
+    id: product._id,
+    name: product.name,
+    sku: product.sku,
+    priceCents: product.priceCents,
+    active: product.active,
+  })) || [];
 
-  const { data: products, isLoading: productsLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      const response = await http.get('/products');
-      return response.data.products as Product[];
-    },
-  });
+  const templatesLoading = convexQuoteTemplates === undefined;
+  const productsLoading = convexProducts === undefined;
+
+  // 🚀 Convex mutations for quote templates
+  const convexCreateTemplate = useConvexMutation(api.quoteTemplates.create);
+  const convexUpdateTemplate = useConvexMutation(api.quoteTemplates.update);
+  const convexDeleteTemplate = useConvexMutation(api.quoteTemplates.remove);
+
+  // 🚀 Convex mutations for products
+  const convexCreateProduct = useConvexMutation(api.products.create);
+  const convexUpdateProduct = useConvexMutation(api.products.update);
+  const convexDeleteProduct = useConvexMutation(api.products.remove);
 
   const createTemplateMutation = useMutation({
-    mutationFn: (template: Omit<QuoteTemplate, 'id'>) =>
-      http.post('/quote_templates', template),
+    mutationFn: async (template: Omit<QuoteTemplate, 'id'>) => {
+      return await convexCreateTemplate({
+        title: template.title,
+        body: template.body,
+        defaultPriceCents: template.defaultPriceCents,
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['quote-templates'] });
+      // No need to invalidate queries - Convex updates automatically!
       setShowTemplateModal(false);
       setEditingTemplate(null);
     },
   });
 
   const updateTemplateMutation = useMutation({
-    mutationFn: (template: QuoteTemplate) =>
-      http.put(`/quote_templates/${template.id}`, template),
+    mutationFn: async (template: QuoteTemplate) => {
+      return await convexUpdateTemplate({
+        id: template.id as Id<"quoteTemplates">,
+        title: template.title,
+        body: template.body,
+        defaultPriceCents: template.defaultPriceCents,
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['quote-templates'] });
+      // No need to invalidate queries - Convex updates automatically!
       setShowTemplateModal(false);
       setEditingTemplate(null);
     },
   });
 
   const deleteTemplateMutation = useMutation({
-    mutationFn: (id: string) => http.delete(`/quote_templates/${id}`),
+    mutationFn: async (id: string) => {
+      return await convexDeleteTemplate({ id: id as Id<"quoteTemplates"> });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['quote-templates'] });
+      // No need to invalidate queries - Convex updates automatically!
     },
   });
 
   const createProductMutation = useMutation({
-    mutationFn: (product: Omit<Product, 'id'>) =>
-      http.post('/products', product),
+    mutationFn: async (product: Omit<Product, 'id'>) => {
+      return await convexCreateProduct({
+        name: product.name,
+        sku: product.sku,
+        priceCents: product.priceCents,
+        active: product.active,
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      // No need to invalidate queries - Convex updates automatically!
       setShowProductModal(false);
       setEditingProduct(null);
     },
   });
 
   const updateProductMutation = useMutation({
-    mutationFn: (product: Product) =>
-      http.put(`/products/${product.id}`, product),
+    mutationFn: async (product: Product) => {
+      return await convexUpdateProduct({
+        id: product.id as Id<"products">,
+        name: product.name,
+        sku: product.sku,
+        priceCents: product.priceCents,
+        active: product.active,
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      // No need to invalidate queries - Convex updates automatically!
       setShowProductModal(false);
       setEditingProduct(null);
     },
   });
 
   const deleteProductMutation = useMutation({
-    mutationFn: (id: string) => http.delete(`/products/${id}`),
+    mutationFn: async (id: string) => {
+      return await convexDeleteProduct({ id: id as Id<"products"> });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      // No need to invalidate queries - Convex updates automatically!
     },
   });
 
@@ -127,25 +156,6 @@ export const AdminPage: React.FC = () => {
     <Layout>
       <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
         <h1 className="text-xl sm:text-2xl font-bold text-[#0E2A47] mb-4 sm:mb-6">Admin Dashboard</h1>
-
-        {/* 🚀 Temporary Backfill Function */}
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <h3 className="text-sm font-medium text-yellow-800 mb-2">🔧 Data Backfill</h3>
-          <p className="text-xs text-yellow-700 mb-3">
-            Create missing shipment records for existing quote requests (one-time fix)
-          </p>
-          <div className="flex items-center space-x-3">
-            <Button
-              onClick={handleBackfillShipments}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-3 py-1"
-            >
-              Backfill Missing Shipments
-            </Button>
-            {backfillResult && (
-              <span className="text-sm text-yellow-800 font-medium">{backfillResult}</span>
-            )}
-          </div>
-        </div>
 
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-4 sm:mb-6">

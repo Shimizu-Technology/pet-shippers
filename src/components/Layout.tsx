@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Inbox, Package, Settings, User, LogOut, CreditCard, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Inbox, Package, Settings, User, LogOut, CreditCard, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
@@ -10,21 +10,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const { user, logout } = useAuth();
-  const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const roleSwitcherRef = useRef<HTMLDivElement>(null);
-
-  // Close role switcher when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (roleSwitcherRef.current && !roleSwitcherRef.current.contains(event.target as Node)) {
-        setShowRoleSwitcher(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // 🎯 Keyboard detection for mobile navigation
   useEffect(() => {
@@ -75,24 +61,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return location.pathname.startsWith(href);
   };
 
-  // Dev role switcher functionality
-  const switchRole = (newRole: 'admin' | 'staff' | 'partner' | 'client') => {
-    const mockUsers = {
-      admin: { id: 'u_admin', name: 'Ada Admin', role: 'admin', orgId: 'org1' },
-      staff: { id: 'u_staff', name: 'Ken Staff', role: 'staff', orgId: 'org1' },
-      partner: { id: 'u_partner', name: 'Hawaii Pet Express', role: 'partner', orgId: 'org_hawaii_pets' },
-      client: { id: 'u_client1', name: 'Sarah Johnson', role: 'client', orgId: 'org_client1' },
-    };
-    
-    const newUser = mockUsers[newRole];
-    localStorage.setItem('pet_shipper_user', JSON.stringify(newUser));
-    window.location.reload(); // Simple reload to update the app state
-  };
+
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="h-screen bg-white flex flex-col">
       {/* Top Navigation */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+      <header className="bg-white border-b border-gray-200 flex-shrink-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center">
@@ -136,44 +110,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </nav>
 
             <div className="flex items-center space-x-4">
-              {/* Dev Role Switcher */}
-              <div className="relative" ref={roleSwitcherRef}>
-                <button
-                  onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                  title="Switch Role (Dev Only)"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-                
-                {showRoleSwitcher && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50">
-                    <div className="py-1">
-                      <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-200">
-                        Switch Role (Dev)
-                      </div>
-                      {['admin', 'staff', 'partner', 'client'].map((role) => (
-                        <button
-                          key={role}
-                          onClick={() => {
-                            switchRole(role as any);
-                            setShowRoleSwitcher(false);
-                          }}
-                          className={`block w-full text-left px-3 py-2 text-sm transition-colors ${
-                            user?.role === role
-                              ? 'bg-brand-coral text-white'
-                              : 'text-gray-700 hover:bg-brand-warm'
-                          }`}
-                        >
-                          {role.charAt(0).toUpperCase() + role.slice(1)}
-                          {user?.role === role && ' (Current)'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               <div className="flex items-center text-sm text-gray-700">
                 <User className="w-4 h-4 mr-2" />
                 <div className="hidden sm:block">
@@ -193,7 +129,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 pb-20 md:pb-0">
+      <main className="flex-1 pb-20 md:pb-0 min-h-0">
         {children}
       </main>
 
