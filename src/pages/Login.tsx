@@ -90,12 +90,29 @@ export const LoginPage: React.FC = () => {
 
         {/* Demo credentials */}
         <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">🚀 Demo Credentials (Auto-Created):</h3>
-          <div className="text-xs text-blue-700 space-y-1">
-            <p><strong>Client:</strong> client@example.com / any password</p>
-            <p><strong>Staff:</strong> staff@example.com / any password</p>
-            <p><strong>Admin:</strong> admin@example.com / any password</p>
-            <p className="mt-2 text-blue-600 italic">Users are created automatically on first login!</p>
+          <h3 className="text-sm font-medium text-blue-800 mb-3">🚀 Test Users (Pre-Created):</h3>
+          <div className="text-xs text-blue-700 space-y-3">
+            
+            {/* Client Users */}
+            <div>
+              <p className="font-semibold text-blue-800 mb-1">Clients:</p>
+              <p><strong>Client User:</strong> client@example.com</p>
+              <p><strong>Sarah Johnson:</strong> sarah@example.com</p>
+              <p><strong>Michael Chen:</strong> michael.chen@gmail.com</p>
+              <p><strong>Emily Davis:</strong> emily.davis@yahoo.com</p>
+            </div>
+
+            {/* Staff/Admin Users */}
+            <div>
+              <p className="font-semibold text-blue-800 mb-1">Staff/Admin:</p>
+              <p><strong>Admin User:</strong> admin@example.com</p>
+              <p><strong>Staff User:</strong> staff@example.com</p>
+              <p><strong>Ken Staff:</strong> ken@petshippers.com</p>
+              <p><strong>Maria Rodriguez:</strong> maria@petshippers.com</p>
+              <p><strong>Ada Admin:</strong> ada@petshippers.com</p>
+            </div>
+
+            <p className="mt-2 text-blue-600 italic">All users accept any password.</p>
           </div>
         </div>
       </div>

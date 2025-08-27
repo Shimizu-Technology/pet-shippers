@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Inbox, Package, Settings, User, LogOut, CreditCard, LayoutDashboard } from 'lucide-react';
+import { Inbox, Package, Settings, User, LogOut, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
@@ -41,7 +41,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { name: 'Dashboard', href: `${basePrefix}/dashboard`, icon: LayoutDashboard },
         { name: 'Inbox', href: `${basePrefix}/inbox`, icon: Inbox },
         { name: 'Shipments', href: `${basePrefix}/shipments`, icon: Package },
-        { name: 'Billing', href: `${basePrefix}/billing`, icon: CreditCard },
       ];
     }
 
@@ -137,7 +136,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <nav className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 transition-transform duration-300 ${
         isKeyboardOpen ? 'transform translate-y-full' : 'transform translate-y-0'
       }`}>
-        <div className={`grid ${navigation.length === 4 ? 'grid-cols-4' : navigation.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} h-16`}>
+        <div className={`grid ${navigation.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} h-16`}>
           {navigation.map((item) => {
             const Icon = item.icon;
             return (

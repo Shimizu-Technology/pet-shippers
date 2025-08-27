@@ -145,3 +145,42 @@ export const sendStatus = mutation({
     return messageId;
   },
 });
+
+// Send document requirements using a template
+export const sendDocumentRequirements = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    senderId: v.string(),
+    templateId: v.id("documentTemplates"),
+  },
+  handler: async (ctx, args) => {
+    // Get the document template
+    const template = await ctx.db.get(args.templateId);
+    if (!template) {
+      throw new Error("Document template not found");
+    }
+
+    const payload = {
+      type: "documents_requested",
+      templateId: args.templateId,
+      templateTitle: template.title,
+      templateDescription: template.description,
+      requirements: template.requirements,
+    };
+
+    const messageId = await ctx.db.insert("messages", {
+      conversationId: args.conversationId,
+      senderId: args.senderId,
+      kind: "status",
+      payload,
+      createdAt: Date.now(),
+    });
+
+    // Update conversation lastMessageAt
+    await ctx.db.patch(args.conversationId, {
+      lastMessageAt: Date.now(),
+    });
+
+    return messageId;
+  },
+});

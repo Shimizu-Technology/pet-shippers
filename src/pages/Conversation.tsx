@@ -11,7 +11,7 @@ import {
   DollarSign,
   Package,
   Calendar,
-  Download,
+
   ShoppingCart,
   Plus,
   CheckCircle,
@@ -22,10 +22,12 @@ import {
   Edit3
 } from 'lucide-react';
 import { http } from '../lib/http';
-import { Message, Document, User, ShipmentStatus } from '../types';
+import { Message, User, ShipmentStatus } from '../types';
 import { formatDate, formatCurrency, getStatusLabel, formatRelativeTime } from '../lib/utils';
 import { StatusChangeModal } from '../components/StatusChangeModal';
 import { QuickStatusChanger } from '../components/QuickStatusChanger';
+import { FileUpload } from '../components/FileUpload';
+import { DocumentList } from '../components/DocumentList';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -50,6 +52,9 @@ export const ConversationPage: React.FC = () => {
   // Rename conversation state
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [showDocumentTemplateModal, setShowDocumentTemplateModal] = useState(false);
+  const [showPaperclipUpload, setShowPaperclipUpload] = useState(false);
   
   // Status change modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -85,6 +90,10 @@ export const ConversationPage: React.FC = () => {
   const convexProducts = useConvexQuery(api.products.listActive, useConvex ? {} : "skip");
   
   const convexQuoteTemplates = useConvexQuery(api.quoteTemplates.list, useConvex ? {} : "skip");
+  
+  const convexDocumentTemplates = useConvexQuery(api.documentTemplates.list, {});
+  
+
   
   // 🚀 Get shipment data for this conversation
   const convexShipments = useConvexQuery(
@@ -127,7 +136,7 @@ export const ConversationPage: React.FC = () => {
   
   // Get shipment data for this conversation
   const shipment = convexShipments?.find(ship => ship.conversationId === conversationId) || null;
-  const documents: Document[] = []; // TODO: Add Convex documents query
+
 
   // 🚀 CONVEX REAL-TIME MUTATIONS (New!)
   const convexSendMessage = useConvexMutation(api.messages.send);
@@ -204,14 +213,15 @@ export const ConversationPage: React.FC = () => {
   });
 
   // 🚀 Use Convex mutations for payment requests and status messages
-  const convexCreatePaymentRequest = useConvexMutation(api.payments.createRequest);
+  const convexUpdatePaymentInfo = useConvexMutation(api.shipmentPayments.updatePaymentInfo);
   const convexSendStatus = useConvexMutation(api.messages.sendStatus);
   const convexUpdateShipmentStatus = useConvexMutation(api.shipments.updateStatus);
   const convexUpdateConversation = useConvexMutation(api.conversations.update);
+  const convexSendDocumentRequirements = useConvexMutation(api.messages.sendDocumentRequirements);
 
   const requestPaymentMutation = useMutation({
     mutationFn: async (amount: number) => {
-      if (!conversationId || !user?.id) throw new Error('Missing required data');
+      if (!conversationId || !user?.id || !shipment) throw new Error('Missing required data');
       
       // Create meaningful description based on available context
       let description = `Payment request for pet shipping services`;
@@ -223,11 +233,15 @@ export const ConversationPage: React.FC = () => {
         description = `Pet shipping services - ${conversation.title}`;
       }
       
-      // Create payment request in Convex
-      const paymentId = await convexCreatePaymentRequest({
-        conversationId: conversationId as Id<"conversations">,
-        amountCents: Math.round(amount * 100), // Convert dollars to cents
-        description: description,
+      // Update shipment with payment information using new system
+      await convexUpdatePaymentInfo({
+        shipmentId: shipment._id,
+        totalAmountCents: Math.round(amount * 100),
+        lineItems: [{
+          description: description,
+          amountCents: Math.round(amount * 100),
+          category: 'shipping'
+        }]
       });
 
       // Send status message to conversation
@@ -237,13 +251,12 @@ export const ConversationPage: React.FC = () => {
         text: `Payment request sent: $${amount.toFixed(2)}`,
         payload: {
           type: 'payment_requested',
-          paymentId,
           amountCents: Math.round(amount * 100), // Convert dollars to cents for storage
-          description: `Payment request for pet shipping services`,
+          description: description,
         },
       });
 
-      return { paymentId };
+      return { success: true };
     },
     onSuccess: () => {
       // No need to invalidate queries - Convex updates automatically!
@@ -464,6 +477,12 @@ export const ConversationPage: React.FC = () => {
     });
   };
 
+  const handleDocumentUploadComplete = (documentId: any) => {
+    console.log('Document uploaded:', documentId);
+    // Document will automatically appear in the DocumentList due to real-time updates
+    setShowDocumentUpload(false);
+  };
+
   // Define isStaffOrAdmin at component level
   const isStaffOrAdmin = ['admin', 'staff'].includes(user?.role || '');
 
@@ -489,16 +508,34 @@ export const ConversationPage: React.FC = () => {
 
 
 
+  // Helper function to get sender information
+  const getSenderInfo = (senderId: string) => {
+    const isSystem = senderId === 'system';
+    const isCurrentUser = senderId === user?.id;
+    
+    if (isCurrentUser) return { name: 'You', isCurrentUser: true, isSystem: false };
+    if (isSystem) return { name: 'System', isCurrentUser: false, isSystem: true };
+    
+    const sender = users?.find(u => u._id === senderId);
+    return { 
+      name: sender?.name || 'Unknown User', 
+      role: sender?.role,
+      isCurrentUser: false, 
+      isSystem: false 
+    };
+  };
+
   const renderMessage = (msg: Message) => {
     const isSystem = msg.senderId === 'system';
     const isCurrentUser = msg.senderId === user?.id;
+    const senderInfo = getSenderInfo(msg.senderId);
 
-    if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_') || (msg.payload as any)?.type?.includes('payment_'))) {
+    if (msg.kind === 'status' && (isSystem || (msg.payload as any)?.type?.includes('quote_') || (msg.payload as any)?.type?.includes('payment_') || (msg.payload as any)?.type === 'documents_requested' || (msg.payload as any)?.type === 'document_uploaded')) {
       const payload = msg.payload as any;
       if (payload.type === 'payment_requested') {
         const isCustomer = user?.role === 'client';
         
-        // Enhanced payment request card for customers
+        // Enhanced payment request card for customers - now redirects to shipments
         if (isCustomer) {
         return (
             <div className="flex justify-center my-4 sm:my-6 px-4">
@@ -522,7 +559,7 @@ export const ConversationPage: React.FC = () => {
                 
                 <div className="border-t border-gray-200 pt-4">
                   <Link 
-                    to="/portal/billing"
+                    to={`/portal/shipments${shipment ? `?focus=${shipment._id}` : ''}`}
                     className="w-full bg-[#0E2A47] hover:bg-[#1a3a5c] text-white text-sm py-2.5 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                   >
               <DollarSign className="w-4 h-4" />
@@ -530,10 +567,10 @@ export const ConversationPage: React.FC = () => {
                   </Link>
                 </div>
                 
-                {/* Timestamp */}
+                {/* Sender and Timestamp */}
                 <div className="mt-4 pt-3 border-t border-gray-200">
                   <p className="text-xs text-gray-500 text-center">
-                    Requested {formatDate(msg.createdAt)}
+                    Requested by {senderInfo.name} • {formatDate(msg.createdAt)}
                   </p>
                 </div>
               </div>
@@ -549,19 +586,59 @@ export const ConversationPage: React.FC = () => {
               <span className="truncate">Payment requested: {formatCurrency(payload.amountCents || payload.amount || 0)}</span>
             </div>
             <p className="text-xs text-gray-500">
-              Requested {formatDate(msg.createdAt)}
+              Requested by {senderInfo.name} • {formatDate(msg.createdAt)}
             </p>
           </div>
         );
-      } else if (payload.type === 'payment_completed') {
+      } else if (payload.type === 'payment_completed' || payload.type === 'payment_received') {
         return (
           <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
             <div className="bg-green-100 text-green-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
               <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-              <span className="truncate">Payment completed: {formatCurrency(payload.amountCents)}</span>
+              <span className="truncate">
+                Payment received: {formatCurrency(payload.amountCents)}
+                {payload.paymentStatus === 'paid' && ' (Fully Paid)'}
+                {payload.paymentStatus === 'partial' && ' (Partial Payment)'}
+              </span>
+            </div>
+            {payload.method && (
+              <p className="text-xs text-gray-500">
+                Method: {payload.method}
+                {payload.transactionId && ` • Transaction: ${payload.transactionId}`}
+              </p>
+            )}
+            <p className="text-xs text-gray-500">
+              Processed by {senderInfo.name} • {formatDate(msg.createdAt)}
+            </p>
+          </div>
+        );
+      } else if (payload.type === 'refund_processed') {
+        return (
+          <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
+            <div className="bg-purple-100 text-purple-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">Refund processed: {formatCurrency(payload.amountCents)}</span>
+            </div>
+            {payload.method && (
+              <p className="text-xs text-gray-500">
+                Method: {payload.method}
+                {payload.transactionId && ` • Transaction: ${payload.transactionId}`}
+              </p>
+            )}
+            <p className="text-xs text-gray-500">
+              Processed by {senderInfo.name} • {formatDate(msg.createdAt)}
+            </p>
+          </div>
+        );
+      } else if (payload.type === 'booking_confirmed') {
+        return (
+          <div className="flex flex-col items-center my-3 sm:my-4 px-4 space-y-2">
+            <div className="bg-blue-100 text-blue-800 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm flex items-center space-x-2 max-w-full">
+              <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate">Booking confirmed! Payment received and shipment is now confirmed.</span>
             </div>
             <p className="text-xs text-gray-500">
-              Completed {formatDate(msg.createdAt)}
+              {formatDate(msg.createdAt)}
             </p>
           </div>
         );
@@ -654,7 +731,7 @@ export const ConversationPage: React.FC = () => {
               {/* Timestamp */}
               <div className="mt-4 pt-3 border-t border-gray-200">
                 <p className="text-xs text-gray-500 text-center">
-                  Submitted {formatDate(msg.createdAt)}
+                  Submitted by {senderInfo.name} • {formatDate(msg.createdAt)}
                 </p>
               </div>
             </div>
@@ -700,7 +777,7 @@ export const ConversationPage: React.FC = () => {
                         })()})</span>
                       </Button>
                       <Button
-                        onClick={() => handleNextStep('documents')}
+                        onClick={() => setShowDocumentTemplateModal(true)}
                         className="w-full bg-[#8EB9D4] hover:bg-[#7ba8c7] text-[#0E2A47] text-sm py-2.5 flex items-center justify-center space-x-2"
                       >
                         <FileText className="w-4 h-4" />
@@ -730,7 +807,7 @@ export const ConversationPage: React.FC = () => {
               {/* Timestamp */}
               <div className="mt-4 pt-3 border-t border-gray-200">
                 <p className="text-xs text-gray-500 text-center">
-                  Accepted {formatDate(msg.createdAt)}
+                  Accepted by {senderInfo.name} • {formatDate(msg.createdAt)}
                 </p>
               </div>
             </div>
@@ -744,7 +821,7 @@ export const ConversationPage: React.FC = () => {
               <span className="truncate font-medium">Quote Declined - New quote may be needed</span>
             </div>
             <p className="text-xs text-gray-500">
-              Declined {formatDate(msg.createdAt)}
+              Declined by {senderInfo.name} • {formatDate(msg.createdAt)}
             </p>
           </div>
         );
@@ -762,20 +839,92 @@ export const ConversationPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="space-y-2">
-                {payload.requirements?.map((req: string, index: number) => (
-                  <div key={index} className="flex items-start space-x-2">
-                    <div className="w-2 h-2 bg-[#8EB9D4] rounded-full mt-2 flex-shrink-0"></div>
-                    <p className="text-sm text-[#0E2A47]">{req}</p>
+              <div className="space-y-3">
+                {/* Template info */}
+                {payload.templateTitle && (
+                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                    <h4 className="font-medium text-[#0E2A47] text-sm">{payload.templateTitle}</h4>
+                    {payload.templateDescription && (
+                      <p className="text-xs text-gray-600 mt-1">{payload.templateDescription}</p>
+                    )}
                   </div>
-                ))}
+                )}
+                
+                {/* Requirements list */}
+                {payload.requirements?.map((req: any, index: number) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <h5 className="font-medium text-[#0E2A47] text-sm">{req.name}</h5>
+                      <div className="flex items-center space-x-2">
+                        {req.required && (
+                          <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Required</span>
+                        )}
+                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded capitalize">
+                          {req.category.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">{req.description}</p>
+                    {req.notes && (
+                      <p className="text-xs text-gray-500 mt-2 italic">Note: {req.notes}</p>
+                    )}
+                  </div>
+                )) || (
+                  // Fallback for old format
+                  payload.requirements?.map((req: string, index: number) => (
+                    <div key={index} className="flex items-start space-x-2">
+                      <div className="w-2 h-2 bg-[#8EB9D4] rounded-full mt-2 flex-shrink-0"></div>
+                      <p className="text-sm text-[#0E2A47]">{req}</p>
+                    </div>
+                  ))
+                )}
               </div>
               
               {/* Timestamp */}
               <div className="mt-4 pt-3 border-t border-gray-200">
                 <p className="text-xs text-gray-500 text-center">
-                  Requested {formatDate(msg.createdAt)}
+                  Requested by {senderInfo.name} • {formatDate(msg.createdAt)}
                 </p>
+              </div>
+            </div>
+          </div>
+        );
+      } else if (payload.type === 'document_uploaded') {
+        const fileSizeMB = (payload.documentSize / (1024 * 1024)).toFixed(2);
+        const categoryLabels: Record<string, string> = {
+          health_certificate: "Health Certificate",
+          vaccination_record: "Vaccination Record", 
+          import_permit: "Import Permit",
+          export_permit: "Export Permit",
+          photo: "Photo",
+          other: "Other Document"
+        };
+        const categoryLabel = categoryLabels[payload.documentCategory] || "Document";
+
+        return (
+          <div className="flex justify-center my-3 sm:my-4 px-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 max-w-sm w-full">
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <FileText className="w-3 h-3 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-800">
+                    Document Uploaded
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    <span className="font-medium">{payload.documentName}</span>
+                    <span className="text-green-600"> • {categoryLabel} • {fileSizeMB}MB</span>
+                  </p>
+                  {payload.notes && (
+                    <p className="text-xs text-green-600 mt-1 italic">
+                      Note: {payload.notes}
+                    </p>
+                  )}
+                  <p className="text-xs text-green-600 mt-2">
+                    Uploaded by {senderInfo.name} • {formatDate(msg.createdAt)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -815,7 +964,7 @@ export const ConversationPage: React.FC = () => {
               {/* Timestamp */}
               <div className="mt-4 pt-3 border-t border-gray-200">
                 <p className="text-xs text-gray-500 text-center">
-                  Initiated {formatDate(msg.createdAt)}
+                  Initiated by {senderInfo.name} • {formatDate(msg.createdAt)}
                 </p>
               </div>
             </div>
@@ -829,7 +978,7 @@ export const ConversationPage: React.FC = () => {
               <span className="truncate">Status updated to: {getStatusLabel(payload.to || payload.type)}</span>
             </div>
             <p className="text-xs text-gray-500">
-              {formatDate(msg.createdAt)}
+              Updated by {senderInfo.name} • {formatDate(msg.createdAt)}
             </p>
           </div>
         );
@@ -897,7 +1046,7 @@ export const ConversationPage: React.FC = () => {
             )}
             
             <div className="mt-3 text-xs text-gray-500 text-right">
-              Quote sent {formatDate(msg.createdAt)}
+              Quote sent by {senderInfo.name} • {formatDate(msg.createdAt)}
             </div>
           </div>
         </div>
@@ -929,7 +1078,7 @@ export const ConversationPage: React.FC = () => {
                     {requestPaymentMutation.isPending ? 'Processing...' : 'Add to Order'}
                   </Button>
                 )}
-                <p className="text-xs text-gray-500 mt-2">{formatDate(msg.createdAt)}</p>
+                <p className="text-xs text-gray-500 mt-2">Recommended by {senderInfo.name} • {formatDate(msg.createdAt)}</p>
               </div>
             </div>
           </div>
@@ -937,13 +1086,8 @@ export const ConversationPage: React.FC = () => {
       );
     }
 
-    // Get sender name for attribution
-    const senderName = (() => {
-      if (isCurrentUser) return 'You';
-      if (isSystem) return 'System';
-      const sender = users?.find(u => u._id === msg.senderId);
-      return sender?.name || 'Unknown User';
-    })();
+    // Use the sender name from our helper
+    const senderName = senderInfo.name;
 
     return (
       <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-3 sm:mb-4 px-2`}>
@@ -1156,6 +1300,7 @@ export const ConversationPage: React.FC = () => {
                 )}
                 <button
                   type="button"
+                  onClick={() => setShowPaperclipUpload(true)}
                   className="p-2 text-gray-400 hover:text-[#0E2A47] transition-colors touch-manipulation"
                   title="Attach File"
                 >
@@ -1387,36 +1532,33 @@ export const ConversationPage: React.FC = () => {
 
               {/* Documents */}
               <div>
-                <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
-                <div className="space-y-2">
-                  {documents && documents.length > 0 ? (
-                    documents.map((doc) => (
-                      <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-start space-x-3">
-                          <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {doc.name}
-                            </p>
-                            <p className="text-xs text-gray-500 capitalize">
-                              {doc.type.replace('_', ' ')}
-                            </p>
-                            {doc.expiresOn && (
-                              <DocumentExpiryBadge expiresOn={doc.expiresOn} />
-                            )}
-                          </div>
-                          <button className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
-                            <Download className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      No documents uploaded yet
-                    </p>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-medium text-[#0E2A47]">Documents</h3>
+                  {user?.id && (
+                    <button
+                      onClick={() => setShowDocumentUpload(!showDocumentUpload)}
+                      className="text-sm text-[#0E2A47] hover:text-[#1a3a5c] font-medium"
+                    >
+                      {showDocumentUpload ? 'Cancel' : 'Upload'}
+                    </button>
                   )}
                 </div>
+                
+                {showDocumentUpload && user?.id && (
+                  <div className="mb-4 p-4 border border-gray-200 rounded-lg">
+                    <FileUpload
+                      onUploadComplete={handleDocumentUploadComplete}
+                      conversationId={conversationId as Id<"conversations">}
+                      shipmentId={shipment?._id as Id<"shipments">}
+                      uploadedBy={user.id}
+                    />
+                  </div>
+                )}
+                
+                <DocumentList
+                  conversationId={conversationId as Id<"conversations">}
+                  userRole={user?.role as 'admin' | 'staff' | 'client' | 'partner'}
+                />
               </div>
 
             </div>
@@ -1655,36 +1797,33 @@ export const ConversationPage: React.FC = () => {
 
             {/* Documents */}
             <div>
-              <h3 className="text-lg font-medium text-[#0E2A47] mb-3">Documents</h3>
-              <div className="space-y-2">
-                {documents && documents.length > 0 ? (
-                  documents.map((doc) => (
-                    <div key={doc.id} className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-start space-x-3">
-                            <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {doc.name}
-                          </p>
-                          <p className="text-xs text-gray-500 capitalize">
-                            {doc.type.replace('_', ' ')}
-                          </p>
-                          {doc.expiresOn && (
-                                <DocumentExpiryBadge expiresOn={doc.expiresOn} />
-                          )}
-                        </div>
-                            <button className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    No documents uploaded yet
-                  </p>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-medium text-[#0E2A47]">Documents</h3>
+                {user?.id && (
+                  <button
+                    onClick={() => setShowDocumentUpload(!showDocumentUpload)}
+                    className="text-sm text-[#0E2A47] hover:text-[#1a3a5c] font-medium"
+                  >
+                    {showDocumentUpload ? 'Cancel' : 'Upload'}
+                  </button>
                 )}
               </div>
+              
+              {showDocumentUpload && user?.id && (
+                <div className="mb-4 p-4 border border-gray-200 rounded-lg">
+                  <FileUpload
+                    onUploadComplete={handleDocumentUploadComplete}
+                    conversationId={conversationId as Id<"conversations">}
+                    shipmentId={shipment?._id as Id<"shipments">}
+                    uploadedBy={user.id}
+                  />
+                </div>
+              )}
+              
+              <DocumentList
+                conversationId={conversationId as Id<"conversations">}
+                userRole={user?.role as 'admin' | 'staff' | 'client' | 'partner'}
+              />
             </div>
 
           </div>
@@ -1888,6 +2027,107 @@ export const ConversationPage: React.FC = () => {
           isLoading={statusChangeMutation.isPending}
         />
       )}
+
+      {/* Document Template Selection Modal */}
+      <Modal
+        isOpen={showDocumentTemplateModal}
+        onClose={() => setShowDocumentTemplateModal(false)}
+        title="Select Document Requirements"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Choose a document template to send requirements to the client:
+          </p>
+          
+          {convexDocumentTemplates && convexDocumentTemplates.length > 0 ? (
+            <div className="space-y-3">
+              {convexDocumentTemplates?.map((template: any) => (
+                <div
+                  key={template._id}
+                  className="border border-gray-200 rounded-lg p-4 hover:border-[#0E2A47] cursor-pointer transition-colors"
+                  onClick={async () => {
+                    if (!user?.id || !conversationId) return;
+                    
+                    try {
+                      await convexSendDocumentRequirements({
+                        conversationId: conversationId as Id<"conversations">,
+                        senderId: user.id,
+                        templateId: template._id,
+                      });
+                      setShowDocumentTemplateModal(false);
+                    } catch (error) {
+                      console.error('Failed to send document requirements:', error);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-[#0E2A47] mb-1">{template.title}</h4>
+                      <p className="text-sm text-gray-600 mb-2">{template.description}</p>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded capitalize">
+                          {template.category.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {template.requirements.length} requirement{template.requirements.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <FileText className="w-5 h-5 text-gray-400 flex-shrink-0 ml-3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <p>No document templates available</p>
+              <p className="text-sm">Contact an admin to create document templates</p>
+            </div>
+          )}
+          
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <Button
+              onClick={() => setShowDocumentTemplateModal(false)}
+              className="bg-gray-500 hover:bg-gray-600 text-white"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Paperclip Quick Upload Modal */}
+      <Modal
+        isOpen={showPaperclipUpload}
+        onClose={() => setShowPaperclipUpload(false)}
+        title="Upload Document"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Upload a document to this conversation:
+          </p>
+          
+          <FileUpload
+            conversationId={conversationId as Id<"conversations">}
+            shipmentId={shipment?._id}
+            uploadedBy={user?.id || ''}
+            onUploadComplete={(document) => {
+              console.log('Document uploaded via paperclip:', document);
+              setShowPaperclipUpload(false);
+            }}
+          />
+          
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <Button
+              onClick={() => setShowPaperclipUpload(false)}
+              className="bg-gray-500 hover:bg-gray-600 text-white"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
       </div>
     </Layout>
   );
@@ -2074,38 +2314,3 @@ const ConversationsList: React.FC = () => {
   );
 };
 
-// Document Expiry Badge Component
-const DocumentExpiryBadge: React.FC<{ expiresOn: string }> = ({ expiresOn }) => {
-  const expiryDate = new Date(expiresOn);
-  const now = new Date();
-  const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  // Show warning if expires within 45 days or has expired
-  const isExpiringSoon = daysUntilExpiry <= 45;
-  const isExpired = daysUntilExpiry < 0;
-  
-  if (!isExpiringSoon) {
-    return (
-      <div className="flex items-center text-xs text-gray-500 mt-1">
-        <Calendar className="w-3 h-3 mr-1" />
-        Expires {expiryDate.toLocaleDateString()}
-      </div>
-    );
-  }
-  
-  return (
-    <div className="flex items-center text-xs mt-1">
-      <Calendar className="w-3 h-3 mr-1" />
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-        isExpired 
-          ? 'bg-red-100 text-red-800' 
-          : 'bg-orange-100 text-orange-800'
-      }`}>
-        {isExpired 
-          ? `Expired ${Math.abs(daysUntilExpiry)} days ago`
-          : `Expires in ${daysUntilExpiry} days`
-        }
-      </span>
-    </div>
-  );
-};

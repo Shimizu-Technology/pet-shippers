@@ -8,6 +8,7 @@ import { Layout } from '../components/Layout';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
+import { PaymentSection } from '../components/PaymentSection';
 // Convex imports for real-time shipment data
 import { useQuery as useConvexQuery, useMutation as useConvexMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -55,6 +56,7 @@ export const ShipmentsPage: React.FC = () => {
   const shipments = convexShipments
     ?.map((convexShip: any) => ({
       id: convexShip._id,
+      _id: convexShip._id, // Keep Convex ID for PaymentSection
       conversationId: convexShip.conversationId,
       petName: convexShip.petName,
       petType: convexShip.petType,
@@ -72,6 +74,13 @@ export const ShipmentsPage: React.FC = () => {
       flightNumber: convexShip.flightNumber,
       crateSize: convexShip.crateSize,
       specialInstructions: convexShip.specialInstructions,
+      // Payment fields - CRITICAL for PaymentSection
+      totalAmountCents: convexShip.totalAmountCents,
+      paidAmountCents: convexShip.paidAmountCents,
+      paymentStatus: convexShip.paymentStatus,
+      paymentDueDate: convexShip.paymentDueDate,
+      lineItems: convexShip.lineItems,
+      paymentHistory: convexShip.paymentHistory,
       createdAt: new Date(convexShip.createdAt).toISOString(),
       updatedAt: new Date(convexShip.updatedAt).toISOString(),
     }))
@@ -86,9 +95,9 @@ export const ShipmentsPage: React.FC = () => {
   const documents = convexDocuments?.map((convexDoc: any) => ({
     id: convexDoc._id,
     name: convexDoc.name,
-    type: convexDoc.type,
-    url: convexDoc.url,
-    expiresOn: convexDoc.expiresOn,
+    type: convexDoc.category, // Map category to type for compatibility
+    url: null, // Will be fetched when needed via getFileUrl
+    expiresOn: null, // Not applicable for our document system
     shipmentId: convexDoc.shipmentId,
     conversationId: convexDoc.conversationId,
     uploadedBy: convexDoc.uploadedBy,
@@ -926,6 +935,15 @@ export const ShipmentsPage: React.FC = () => {
                   );
                 })()}
               </div>
+
+              {/* Payment & Billing */}
+              <PaymentSection 
+                shipment={selectedShipment}
+                isStaffOrAdmin={isStaffOrAdmin}
+                onPaymentUpdate={() => {
+                  // Refresh shipment data - Convex will handle this automatically
+                }}
+              />
 
               {/* Admin Actions - Only for staff/admin */}
               {isStaffOrAdmin && (

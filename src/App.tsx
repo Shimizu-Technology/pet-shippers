@@ -9,7 +9,7 @@ import { ConversationPage } from './pages/Conversation';
 import { ShipmentsPage } from './pages/Shipments';
 import { AdminPage } from './pages/Admin';
 import { CustomerDashboardPage } from './pages/CustomerDashboard';
-import { BillingPage } from './pages/Billing';
+
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
@@ -104,14 +104,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/portal/billing"
-            element={
-              <ProtectedRoute>
-                <BillingPage />
-              </ProtectedRoute>
-            }
-          />
+
           
           {/* Legacy routes for backward compatibility */}
           <Route

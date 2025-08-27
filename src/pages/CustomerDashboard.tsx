@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Package, MessageCircle, FileText, Clock, Plus, Send, User } from 'lucide-react';
+import { Package, MessageCircle, FileText, Clock, Plus, Send, User, DollarSign, CreditCard } from 'lucide-react';
 import { Document } from '../types';
-import { getStatusColor, getStatusLabel, formatRelativeTime } from '../lib/utils';
+import { getStatusColor, getStatusLabel, formatRelativeTime, formatCurrency } from '../lib/utils';
 import { Layout } from '../components/Layout';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
@@ -85,6 +85,30 @@ export const CustomerDashboardPage: React.FC = () => {
   ) || [];
 
   const recentConversations = conversations?.slice(0, 3) || [];
+
+  // Calculate payment summary from shipments
+  const paymentSummary = shipments?.reduce((summary, shipment: any) => {
+    const totalAmount = shipment.totalAmountCents || 0;
+    const paidAmount = shipment.paidAmountCents || 0;
+    const remainingAmount = Math.max(0, totalAmount - paidAmount);
+    
+    return {
+      totalAmount: summary.totalAmount + totalAmount,
+      paidAmount: summary.paidAmount + paidAmount,
+      remainingAmount: summary.remainingAmount + remainingAmount,
+      pendingPayments: summary.pendingPayments + (remainingAmount > 0 ? 1 : 0),
+    };
+  }, {
+    totalAmount: 0,
+    paidAmount: 0,
+    remainingAmount: 0,
+    pendingPayments: 0,
+  }) || {
+    totalAmount: 0,
+    paidAmount: 0,
+    remainingAmount: 0,
+    pendingPayments: 0,
+  };
 
   // 🚀 Use Convex mutation for quote requests
   const convexCreateQuoteRequest = useConvexMutation(api.quoteRequests.create);
@@ -196,11 +220,16 @@ export const CustomerDashboardPage: React.FC = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow col-span-2 md:col-span-1">
             <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left">
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-green-100 flex items-center justify-center mb-2 sm:mb-0">
-                <FileText className="w-6 h-6 sm:w-7 sm:h-7 text-green-600" />
+                <DollarSign className="w-6 h-6 sm:w-7 sm:h-7 text-green-600" />
               </div>
               <div className="sm:ml-4">
-                <p className="text-2xl sm:text-3xl font-bold text-brand-navy">{documents?.length || 0}</p>
-                <p className="text-xs sm:text-sm font-medium text-gray-600">Documents</p>
+                <p className="text-2xl sm:text-3xl font-bold text-brand-navy">{paymentSummary.pendingPayments}</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Pending Payments</p>
+                {paymentSummary.remainingAmount > 0 && (
+                  <p className="text-xs text-green-600 font-medium">
+                    {formatCurrency(paymentSummary.remainingAmount / 100)} due
+                  </p>
+                )}
               </div>
             </div>
           </div>

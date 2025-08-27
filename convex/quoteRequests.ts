@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
 
 // Create a new quote request from a customer
 export const create = mutation({
@@ -66,10 +65,10 @@ export const create = mutation({
       updatedAt: Date.now(),
     });
 
-    // Create an initial system message in the conversation with full quote details
+    // Create an initial message in the conversation with full quote details
     await ctx.db.insert("messages", {
       conversationId,
-      senderId: "system",
+      senderId: args.customerUserId,
       text: `New quote request submitted for ${args.petName}`,
       kind: "status",
       payload: {
